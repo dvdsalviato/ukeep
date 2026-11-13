@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class UColors {
   UColors._();
@@ -17,7 +16,8 @@ class UColors {
 
 TextStyle serif(double size,
     {FontWeight weight = FontWeight.w600, FontStyle? style, Color? color}) {
-  return GoogleFonts.newsreader(
+  return TextStyle(
+    fontFamily: 'serif',
     fontSize: size,
     fontWeight: weight,
     fontStyle: style,
@@ -36,7 +36,7 @@ ThemeData buildTheme() {
     secondary: UColors.accent,
     surface: Colors.white,
   );
-  final base = GoogleFonts.interTextTheme(ThemeData.light().textTheme).apply(
+  final base = ThemeData.light().textTheme.apply(
     bodyColor: UColors.ink,
     displayColor: UColors.ink,
   );

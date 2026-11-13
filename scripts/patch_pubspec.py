@@ -13,7 +13,7 @@ if "- assets/" not in s:
         sys.exit("pubspec.yaml: 'uses-material-design: true' non trovato")
     s = s.replace(marker, marker + "\n  assets:\n    - assets/", 1)
 
-if "flutter_launcher_icons:" not in s:
+if "\nflutter_launcher_icons:" not in s:
     s = s.rstrip("\n") + (
         "\n\nflutter_launcher_icons:\n"
         "  android: true\n"

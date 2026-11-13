@@ -61,7 +61,14 @@ class TaskRow extends StatelessWidget {
     final overdue = !done &&
         due != null &&
         dayOnly(due).isBefore(dayOnly(DateTime.now()));
-    final who = memberById(members, task.data['assignee'] as String?);
+    final assignee = task.data['assignee'] as String?;
+    final who = memberById(members, assignee);
+    final meUid = FirebaseAuth.instance.currentUser?.uid;
+    final forLabel = assignee == null
+        ? 'Per entrambi'
+        : (assignee == meUid
+            ? 'Per me'
+            : 'Per ${firstName(who?.str('name')).isEmpty ? 'il partner' : firstName(who?.str('name'))}');
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -100,10 +107,13 @@ class TaskRow extends StatelessWidget {
                       color: done ? UColors.muted : UColors.ink,
                     ),
                   ),
-                  if (!compact && task.str('note').isNotEmpty)
+                  if (!compact)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
-                      child: Text(task.str('note'),
+                      child: Text(
+                          task.str('note').isEmpty
+                              ? forLabel
+                              : '$forLabel · ${task.str('note')}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -112,11 +122,18 @@ class TaskRow extends StatelessWidget {
                 ],
               ),
             ),
-            if (who != null && !compact)
+            if (!compact)
               Padding(
                 padding: const EdgeInsets.only(left: 8),
-                child: UAvatar(
-                    name: who.str('name'), photo: who.str('photo'), size: 24),
+                child: assignee == null
+                    ? Row(mainAxisSize: MainAxisSize.min, children: [
+                        for (final m in members.take(2))
+                          Padding(
+                            padding: const EdgeInsets.only(left: 2),
+                            child: UAvatar.member(m, size: 24),
+                          ),
+                      ])
+                    : UAvatar.member(who, size: 24),
               ),
             if (due != null)
               Padding(
@@ -395,26 +412,41 @@ class _TaskFormState extends State<_TaskForm> {
           ],
         ),
         const SizedBox(height: 16),
-        const Text('Di chi è', style: TextStyle(fontWeight: FontWeight.w700)),
+        const Text('Per chi è',
+            style: TextStyle(fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          children: [
-            ChoiceChip(
-              label: const Text('Di entrambi'),
-              selected: _assignee == null,
-              onSelected: (_) => setState(() => _assignee = null),
-            ),
-            for (final m in widget.members)
+        Builder(builder: (context) {
+          final meUid = FirebaseAuth.instance.currentUser?.uid;
+          final others = widget.members.where((m) => m.id != meUid).toList();
+          final partnerName = others.isEmpty
+              ? null
+              : (firstName(others.first.str('name')).isEmpty
+                  ? 'il partner'
+                  : firstName(others.first.str('name')));
+          return Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
               ChoiceChip(
-                label: Text(firstName(m.str('name')).isEmpty
-                    ? 'Partner'
-                    : firstName(m.str('name'))),
-                selected: _assignee == m.id,
-                onSelected: (_) => setState(() => _assignee = m.id),
+                label: const Text('Per me'),
+                selected: _assignee == meUid && meUid != null,
+                onSelected: (_) => setState(() => _assignee = meUid),
               ),
-          ],
-        ),
+              if (others.isNotEmpty)
+                ChoiceChip(
+                  label: Text('Per $partnerName'),
+                  selected: _assignee == others.first.id,
+                  onSelected: (_) =>
+                      setState(() => _assignee = others.first.id),
+                ),
+              ChoiceChip(
+                label: const Text('Per entrambi'),
+                selected: _assignee == null,
+                onSelected: (_) => setState(() => _assignee = null),
+              ),
+            ],
+          );
+        }),
         const SizedBox(height: 22),
         Row(
           children: [

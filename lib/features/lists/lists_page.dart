@@ -291,7 +291,7 @@ class _ListDetailPageState extends ConsumerState<ListDetailPage> {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
+        padding: EdgeInsets.fromLTRB(16, 8, 16, 40 + bottomInset(context)),
         children: [
           UCard(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),

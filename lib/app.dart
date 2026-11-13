@@ -25,8 +25,14 @@ class UkeepApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      builder: (context, child) =>
-          GradientBg(child: child ?? const SizedBox.shrink()),
+      builder: (context, child) {
+        final mq = MediaQuery.of(context);
+        final sys = mq.textScaler.scale(1.0);
+        return MediaQuery(
+          data: mq.copyWith(textScaler: TextScaler.linear(sys * 0.9)),
+          child: GradientBg(child: child ?? const SizedBox.shrink()),
+        );
+      },
       home: const AuthGate(),
     );
   }

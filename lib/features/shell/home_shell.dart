@@ -35,16 +35,29 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       body: SafeArea(bottom: false, child: IndexedStack(index: _index, children: pages)),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: Colors.white.withAlpha(235),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.white.withAlpha(0), Colors.white.withAlpha(215)],
+          ),
         ),
         child: NavigationBarTheme(
           data: NavigationBarThemeData(
             backgroundColor: Colors.transparent,
-            indicatorColor: UColors.rose.withAlpha(90),
+            surfaceTintColor: Colors.transparent,
+            indicatorColor: Colors.transparent,
+            iconTheme: WidgetStateProperty.resolveWith((states) =>
+                IconThemeData(
+                    size: 27,
+                    color: states.contains(WidgetState.selected)
+                        ? UColors.ink
+                        : UColors.muted)),
             labelTextStyle: WidgetStateProperty.resolveWith((states) =>
                 TextStyle(
                     fontSize: 12,
+                    color: states.contains(WidgetState.selected)
+                        ? UColors.ink
+                        : UColors.muted,
                     fontWeight: states.contains(WidgetState.selected)
                         ? FontWeight.w700
                         : FontWeight.w500)),

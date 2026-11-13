@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/photo.dart';
 import '../../core/theme.dart';
 import '../../core/ui.dart';
 import '../../data/providers.dart';
@@ -28,24 +29,12 @@ class HomePage extends ConsumerWidget {
     return n;
   }
 
-  String _together(DateTime since) {
-    final days = dayOnly(DateTime.now()).difference(dayOnly(since)).inDays;
-    if (days >= 365) {
-      final y = days ~/ 365;
-      return 'Insieme da $y ${y == 1 ? 'anno' : 'anni'}';
-    }
-    if (days >= 30) {
-      final m = days ~/ 30;
-      return 'Insieme da $m ${m == 1 ? 'mese' : 'mesi'}';
-    }
-    return 'Insieme da $days ${days == 1 ? 'giorno' : 'giorni'}';
-  }
-
-  Future<void> _pickSince(BuildContext context, Repo repo) async {
+  Future<void> _pickSince(BuildContext context, Repo repo,
+      DateTime? current) async {
     final now = DateTime.now();
     final d = await showDatePicker(
       context: context,
-      initialDate: now,
+      initialDate: current ?? now,
       firstDate: DateTime(1980),
       lastDate: now,
       helpText: 'Da quando state insieme?',
@@ -116,14 +105,16 @@ class HomePage extends ConsumerWidget {
             for (var i = 0; i < sorted.length && i < 2; i++)
               Transform.translate(
                 offset: Offset(i == 0 ? 8 : -8, 0),
-                child: Container(
-                  padding: const EdgeInsets.all(3),
-                  decoration: const BoxDecoration(
-                      color: Colors.white, shape: BoxShape.circle),
-                  child: UAvatar(
-                      name: sorted[i].str('name'),
-                      photo: sorted[i].str('photo'),
-                      size: 76),
+                child: GestureDetector(
+                  onTap: sorted[i].id == me?.uid
+                      ? () => changeProfilePhoto(context)
+                      : null,
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: const BoxDecoration(
+                        color: Colors.white, shape: BoxShape.circle),
+                    child: UAvatar.member(sorted[i], size: 76),
+                  ),
                 ),
               ),
             if (sorted.length < 2)
@@ -160,13 +151,13 @@ class HomePage extends ConsumerWidget {
         const SizedBox(height: 8),
         Center(
           child: InkWell(
-            onTap: repo == null ? null : () => _pickSince(context, repo),
+            onTap: repo == null ? null : () => _pickSince(context, repo, since),
             borderRadius: BorderRadius.circular(12),
             child: Padding(
               padding: const EdgeInsets.all(6),
               child: Text(
                 since != null
-                    ? '${_together(since)}  ›'
+                    ? '${togetherText(since)}  ›'
                     : 'Imposta da quando state insieme  ›',
                 style: const TextStyle(color: UColors.muted, fontSize: 16),
               ),
@@ -220,7 +211,7 @@ class HomePage extends ConsumerWidget {
                         ? '—'
                         : '${today.difference(dayOnly(since)).inDays}',
                     label: 'giorni insieme',
-                    onTap: repo == null ? null : () => _pickSince(context, repo)),
+                    onTap: repo == null ? null : () => _pickSince(context, repo, since)),
                 _vline(),
                 _Stat(
                     value: '$streak',

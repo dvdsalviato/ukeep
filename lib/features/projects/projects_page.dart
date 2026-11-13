@@ -308,7 +308,7 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 40),
+        padding: EdgeInsets.fromLTRB(16, 0, 16, 40 + bottomInset(context)),
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 0, 8, 14),

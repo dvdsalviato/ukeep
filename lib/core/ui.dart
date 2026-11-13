@@ -1,5 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
+import '../data/repo.dart';
 
 import 'theme.dart';
 
@@ -130,22 +134,39 @@ class EmptyHint extends StatelessWidget {
 }
 
 class UAvatar extends StatelessWidget {
-  const UAvatar({super.key, this.name, this.photo, this.size = 40});
+  const UAvatar({super.key, this.name, this.photo, this.b64, this.size = 40});
   final String? name;
   final String? photo;
+  final String? b64;
   final double size;
+
+  factory UAvatar.member(Item? m, {double size = 40}) => UAvatar(
+        name: m?.str('name'),
+        photo: m?.str('photo'),
+        b64: m?.str('photoB64'),
+        size: size,
+      );
+
+  ImageProvider? _image() {
+    if (b64 != null && b64!.isNotEmpty) {
+      try {
+        return MemoryImage(base64Decode(b64!));
+      } catch (_) {}
+    }
+    if (photo != null && photo!.isNotEmpty) return NetworkImage(photo!);
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
     final initial =
         (name != null && name!.isNotEmpty) ? name![0].toUpperCase() : '?';
+    final img = _image();
     return CircleAvatar(
       radius: size / 2,
       backgroundColor: UColors.rose.withAlpha(120),
-      backgroundImage: (photo != null && photo!.isNotEmpty)
-          ? NetworkImage(photo!)
-          : null,
-      child: (photo == null || photo!.isEmpty)
+      backgroundImage: img,
+      child: img == null
           ? Text(initial,
               style: TextStyle(
                   fontWeight: FontWeight.w700,
@@ -184,13 +205,20 @@ Future<T?> showUSheet<T>(BuildContext context, Widget child) {
   return showModalBottomSheet<T>(
     context: context,
     isScrollControlled: true,
-    useSafeArea: true,
+    useSafeArea: false,
+    constraints:
+        BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.92),
     backgroundColor: Colors.white,
     shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
-    builder: (ctx) => Padding(
-      padding: EdgeInsets.fromLTRB(
-          24, 12, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
+    builder: (ctx) {
+      final mq = MediaQuery.of(ctx);
+      final bottom = (mq.viewInsets.bottom > mq.viewPadding.bottom
+              ? mq.viewInsets.bottom
+              : mq.viewPadding.bottom) +
+          24;
+      return Padding(
+      padding: EdgeInsets.fromLTRB(24, 12, 24, bottom),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -210,7 +238,8 @@ Future<T?> showUSheet<T>(BuildContext context, Widget child) {
           ],
         ),
       ),
-    ),
+    );
+    },
   );
 }
 
@@ -262,4 +291,34 @@ String relDay(DateTime d, {bool far = false}) {
   if (diff == -1) return 'Ieri';
   if (far && diff > 1) return 'Tra $diff giorni';
   return fmtDay(d);
+}
+
+/// Spazio da lasciare in fondo per non finire sotto i tasti di sistema.
+double bottomInset(BuildContext context) =>
+    MediaQuery.of(context).viewPadding.bottom;
+
+/// "Insieme da 5 anni, 2 mesi e 3 giorni" in base alla data di inizio.
+String togetherText(DateTime since, {DateTime? now}) {
+  final n = dayOnly(now ?? DateTime.now());
+  final s = dayOnly(since);
+  var y = n.year - s.year;
+  var m = n.month - s.month;
+  var d = n.day - s.day;
+  if (d < 0) {
+    m -= 1;
+    d += DateTime(n.year, n.month, 0).day;
+  }
+  if (m < 0) {
+    y -= 1;
+    m += 12;
+  }
+  final parts = <String>[
+    if (y > 0) '$y ${y == 1 ? 'anno' : 'anni'}',
+    if (m > 0) '$m ${m == 1 ? 'mese' : 'mesi'}',
+    if (d > 0) '$d ${d == 1 ? 'giorno' : 'giorni'}',
+  ];
+  if (parts.isEmpty) return 'Insieme da oggi';
+  if (parts.length == 1) return 'Insieme da ${parts[0]}';
+  if (parts.length == 2) return 'Insieme da ${parts[0]} e ${parts[1]}';
+  return 'Insieme da ${parts[0]}, ${parts[1]} e ${parts[2]}';
 }

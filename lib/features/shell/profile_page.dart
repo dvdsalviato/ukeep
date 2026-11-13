@@ -1,8 +1,11 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
+import '../../core/photo.dart';
 import '../../core/theme.dart';
 import '../../core/ui.dart';
 import '../../data/providers.dart';
@@ -19,6 +22,10 @@ class ProfilePage extends ConsumerWidget {
     final members = ref.watch(membersProvider).value ?? [];
     final repo = ref.watch(repoProvider);
     final partners = members.where((m) => m.id != user.uid).toList();
+    final meItem = memberById(members, user.uid);
+    DateTime? since;
+    final rawSince = couple?['since'];
+    if (rawSince is Timestamp) since = rawSince.toDate();
     final code = couple?['inviteCode'] as String? ?? '…';
     final count = (couple?['members'] as List?)?.length ?? 1;
 
@@ -31,7 +38,30 @@ class ProfilePage extends ConsumerWidget {
           child: UCard(
             child: Row(
               children: [
-                UAvatar(name: user.displayName, photo: user.photoURL, size: 64),
+                GestureDetector(
+                  onTap: () => changeProfilePhoto(context),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      UAvatar(
+                          name: user.displayName,
+                          photo: user.photoURL,
+                          b64: meItem?.str('photoB64'),
+                          size: 72),
+                      Positioned(
+                        right: -2,
+                        bottom: -2,
+                        child: Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: const BoxDecoration(
+                              color: UColors.dark, shape: BoxShape.circle),
+                          child: const Icon(Icons.photo_camera,
+                              size: 14, color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
@@ -60,10 +90,7 @@ class ProfilePage extends ConsumerWidget {
                 if (count >= 2 && partners.isNotEmpty)
                   Row(
                     children: [
-                      UAvatar(
-                          name: partners.first.str('name'),
-                          photo: partners.first.str('photo'),
-                          size: 40),
+                      UAvatar.member(partners.first, size: 40),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
@@ -119,14 +146,19 @@ class ProfilePage extends ConsumerWidget {
                 ListTile(
                   leading: const Icon(Icons.favorite_border),
                   title: const Text('Data di inizio della coppia'),
-                  trailing: const Icon(Icons.chevron_right),
+                  subtitle: Text(since == null
+                      ? 'Non ancora impostata'
+                      : '${DateFormat('d MMMM y', 'it_IT').format(since)} · ${togetherText(since).replaceFirst('Insieme da ', '')}'),
+                  trailing: Text(since == null ? 'Imposta' : 'Cambia',
+                      style: const TextStyle(
+                          color: UColors.accent, fontWeight: FontWeight.w700)),
                   onTap: repo == null
                       ? null
                       : () async {
                           final now = DateTime.now();
                           final d = await showDatePicker(
                             context: context,
-                            initialDate: now,
+                            initialDate: since ?? now,
                             firstDate: DateTime(1980),
                             lastDate: now,
                             helpText: 'Da quando state insieme?',

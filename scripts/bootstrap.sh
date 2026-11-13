@@ -17,7 +17,7 @@ if [ ! -d android ]; then
 fi
 
 flutter pub add flutter_localizations --sdk=flutter
-flutter pub add firebase_core firebase_auth cloud_firestore google_sign_in flutter_riverpod intl
+flutter pub add firebase_core firebase_auth cloud_firestore google_sign_in flutter_riverpod intl image_picker
 flutter pub add --dev flutter_launcher_icons
 
 python3 scripts/patch_pubspec.py

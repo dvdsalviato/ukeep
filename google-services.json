@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "550170162235",
+    "project_id": "ukeep-e1f0e",
+    "storage_bucket": "ukeep-e1f0e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:550170162235:android:43b9638a8e5d47c0fc181e",
+        "android_client_info": {
+          "package_name": "com.dvdsalviato.ukeep"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "550170162235-39g99emojvnuitfp2fg2du4cvbgr48mk.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.dvdsalviato.ukeep",
+            "certificate_hash": "53a3434093e76054a4b6a28ac788dd797e609beb"
+          }
+        },
+        {
+          "client_id": "550170162235-4mn1fldp0jmilgp5kk4u1gqcaerb9c6t.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAyg-2pR-GU3R_bvhoiFUeOlffjTT7GD20"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "550170162235-4mn1fldp0jmilgp5kk4u1gqcaerb9c6t.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

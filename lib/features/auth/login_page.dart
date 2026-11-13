@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/theme.dart';
+import '../../core/ui.dart';
 import '../../data/providers.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
@@ -29,33 +31,39 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
     return Scaffold(
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(32),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Ukeep', style: t.displayMedium),
-              const SizedBox(height: 8),
-              Text('Le cose di entrambi, in un posto solo.',
-                  style: t.bodyLarge),
-              const SizedBox(height: 48),
+              const Spacer(flex: 2),
+              Image.asset('assets/logo.png', width: 170, height: 170),
+              const SizedBox(height: 12),
+              Text('Ukeep', style: serif(52)),
+              const SizedBox(height: 10),
+              const Text(
+                'Le cose di entrambi,\nin un posto solo.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: UColors.muted, fontSize: 17),
+              ),
+              const Spacer(flex: 3),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
+                  style: pillStyle,
                   onPressed: _loading ? null : _signIn,
                   icon: _loading
                       ? const SizedBox(
                           width: 18,
                           height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2))
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
                       : const Icon(Icons.login),
                   label: const Text('Continua con Google'),
                 ),
               ),
+              const SizedBox(height: 12),
             ],
           ),
         ),

@@ -2,6 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/theme.dart';
+import '../../core/ui.dart';
 import '../../data/providers.dart';
 
 class CouplePage extends ConsumerStatefulWidget {
@@ -39,7 +41,7 @@ class _CouplePageState extends ConsumerState<CouplePage> {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser!;
     final service = ref.read(coupleServiceProvider);
-    final t = Theme.of(context).textTheme;
+    final first = (user.displayName ?? '').split(' ').first;
     return Scaffold(
       appBar: AppBar(
         actions: [
@@ -53,31 +55,65 @@ class _CouplePageState extends ConsumerState<CouplePage> {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            Text('Ciao ${user.displayName ?? ''}', style: t.headlineMedium),
-            const SizedBox(height: 8),
-            const Text('Crea il vostro spazio condiviso oppure entra in '
-                'quello del tuo partner con il codice invito.'),
-            const SizedBox(height: 32),
-            FilledButton(
-              onPressed:
-                  _busy ? null : () => _run(() => service.createCouple(user)),
-              child: const Text('Crea il nostro spazio'),
+            Center(child: Image.asset('assets/logo.png', width: 110)),
+            const SizedBox(height: 12),
+            Text('Ciao${first.isEmpty ? '' : ', $first'}',
+                textAlign: TextAlign.center, style: serif(38)),
+            const SizedBox(height: 10),
+            const Text(
+              'Crea il vostro spazio condiviso oppure entra in quello '
+              'del tuo partner con il codice invito.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: UColors.muted, fontSize: 16),
             ),
-            const SizedBox(height: 32),
-            TextField(
-              controller: _code,
-              textCapitalization: TextCapitalization.characters,
-              decoration: const InputDecoration(
-                labelText: 'Codice invito',
-                border: OutlineInputBorder(),
+            const SizedBox(height: 28),
+            UCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('Nuovo spazio', style: serif(24)),
+                  const SizedBox(height: 6),
+                  const Text('Lo crei tu e poi inviti il partner.',
+                      style: TextStyle(color: UColors.muted)),
+                  const SizedBox(height: 14),
+                  FilledButton(
+                    style: pillStyle,
+                    onPressed: _busy
+                        ? null
+                        : () => _run(() => service.createCouple(user)),
+                    child: const Text('Crea il nostro spazio'),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
-            OutlinedButton(
-              onPressed: _busy
-                  ? null
-                  : () => _run(() => service.joinCouple(user, _code.text)),
-              child: const Text('Entra con il codice'),
+            const SizedBox(height: 16),
+            UCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('Ho un codice', style: serif(24)),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _code,
+                    textCapitalization: TextCapitalization.characters,
+                    decoration: fieldDeco('Codice invito'),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      shape: const StadiumBorder(),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      side: const BorderSide(color: UColors.dark),
+                      foregroundColor: UColors.dark,
+                    ),
+                    onPressed: _busy
+                        ? null
+                        : () => _run(
+                            () => service.joinCouple(user, _code.text)),
+                    child: const Text('Entra con il codice'),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

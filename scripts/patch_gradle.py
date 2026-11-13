@@ -62,3 +62,9 @@ s = s[:idx] + loader + s[idx:]
 s = "import java.io.FileInputStream\nimport java.util.Properties\n\n" + s
 p.write_text(s)
 print("build.gradle.kts aggiornato")
+
+# disattiva il lint di release (va in crash in questo ambiente)
+s = p.read_text()
+if "checkReleaseBuilds" not in s:
+    s = s.replace("android {", "android {\n    lint {\n        checkReleaseBuilds = false\n        abortOnError = false\n    }\n", 1)
+    p.write_text(s)

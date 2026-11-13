@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/repo.dart';
+import 'feed.dart';
 import 'push.dart';
 import 'theme.dart';
 
@@ -42,7 +43,8 @@ Item? _find(List<Item> members, String uid) {
 
 /// La prima volta del giorno (dopo le 5:00) chiede come ti senti.
 Future<void> maybeAskMood(
-    BuildContext context, List<Item> members, String uid) async {
+    BuildContext context, List<Item> members, String uid,
+    {Repo? repo}) async {
   final now = DateTime.now();
   if (now.hour < 5) return;
   if (todayMood(_find(members, uid)) != null) return;
@@ -53,10 +55,11 @@ Future<void> maybeAskMood(
     await p.setString('moodAsked', key);
   } catch (_) {}
   if (!context.mounted) return;
-  await showMoodPicker(context, uid);
+  await showMoodPicker(context, uid, repo: repo);
 }
 
-Future<void> showMoodPicker(BuildContext context, String uid) async {
+Future<void> showMoodPicker(BuildContext context, String uid,
+    {Repo? repo}) async {
   final e = await showDialog<String>(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -102,17 +105,23 @@ Future<void> showMoodPicker(BuildContext context, String uid) async {
       'at': FieldValue.serverTimestamp(),
     }
   }, SetOptions(merge: true));
-  Push.instance.toPartner(
-    title: '${Push.instance.myName} oggi si sente $e',
-    body: moodLabel(e),
-    tag: 'mood',
-  );
+  Feed.log(repo,
+      icon: e,
+      text: 'oggi si sente $e ${moodLabel(e).toLowerCase()}',
+      textMe: 'Oggi ti senti $e ${moodLabel(e).toLowerCase()}',
+      pushTitle: '${Push.instance.myName} oggi si sente $e',
+      body: moodLabel(e),
+      tag: 'mood');
 }
 
 /// Abbraccio: lo salva (così si vede in Home) e lo manda al partner.
 Future<void> sendHug(BuildContext context, Repo repo) async {
   final m = ScaffoldMessenger.maybeOf(context);
   repo.add('hugs', {'at': FieldValue.serverTimestamp()});
+  Feed.log(repo,
+      icon: '🤗',
+      text: 'ha mandato un abbraccio',
+      push: false);
   final ok = await Push.instance.toPartner(
     title: '🤗 ${Push.instance.myName} ti pensa',
     body: 'Ti ha mandato un abbraccio',

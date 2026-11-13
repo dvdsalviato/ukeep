@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/push.dart';
+import '../../core/feed.dart';
 import '../../core/secret.dart';
 import '../../core/sub_items.dart';
 import '../../core/theme.dart';
@@ -447,9 +447,9 @@ class ListDetailPage extends ConsumerWidget {
             emptyText: 'La lista è vuota. Scrivi qui sopra il primo elemento.',
             onAdded: isLocked(list)
                 ? null
-                : (t) => Push.instance.toPartner(
-                      title: '${list.str('icon', '📝')} ${list.str('name')}',
-                      body: '${Push.instance.myName} ha aggiunto "$t"',
+                : (t) => Feed.log(repo,
+                      icon: list.str('icon', '📝'),
+                      text: 'ha aggiunto "$t" a ${list.str('name')}',
                       tag: 'list-${list.id}',
                     ),
           ),

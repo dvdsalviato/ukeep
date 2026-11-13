@@ -53,7 +53,9 @@ class _HomeShellState extends ConsumerState<HomeShell>
     if (uid == null || members == null || members.isEmpty) return;
     _moodAsked = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) maybeAskMood(context, members, uid);
+      if (mounted) {
+        maybeAskMood(context, members, uid, repo: ref.read(repoProvider));
+      }
     });
   }
 

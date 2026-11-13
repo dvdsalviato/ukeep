@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/feed.dart';
 import '../../core/mood.dart';
 import '../../core/notifications.dart';
 import '../../core/photo.dart';
@@ -61,6 +62,7 @@ class HomePage extends ConsumerWidget {
     final expenses = ref.watch(expensesProvider).value ?? [];
     final polls = ref.watch(pollsProvider).value ?? [];
     final lastHug = ref.watch(lastHugProvider).value;
+    final feed = ref.watch(feedProvider).value ?? [];
     final me = FirebaseAuth.instance.currentUser;
     final partnerItems = members.where((m) => m.id != me?.uid).toList();
     final partnerName = partnerItems.isEmpty
@@ -183,7 +185,7 @@ class HomePage extends ConsumerWidget {
                         bottom: -4,
                         child: GestureDetector(
                           onTap: sorted[i].id == me?.uid
-                              ? () => showMoodPicker(context, me!.uid)
+                              ? () => showMoodPicker(context, me!.uid, repo: repo)
                               : null,
                           child: Builder(builder: (_) {
                             final mood = todayMood(sorted[i]);
@@ -287,6 +289,13 @@ class HomePage extends ConsumerWidget {
               ),
             ),
         ],
+        if (repo != null && partnerItems.isEmpty)
+          Center(
+            child: TextButton(
+              onPressed: () => onGoTo(4),
+              child: const Text('🤗 Invita il partner: potrete mandarvi abbracci'),
+            ),
+          ),
         const SizedBox(height: 16),
         const StoriesRow(),
         const SizedBox(height: 14),
@@ -431,6 +440,37 @@ class HomePage extends ConsumerWidget {
                             fontSize: 17, fontWeight: FontWeight.w700)),
                   ),
                   Icon(Icons.chevron_right, color: UColors.muted),
+                ],
+              ),
+            ),
+          ),
+        ],
+        if (feed.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: UCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.forum_outlined, color: UColors.ink),
+                      const SizedBox(width: 10),
+                      const Text('Novità',
+                          style: TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.w700)),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                                builder: (_) => const FeedPage())),
+                        child: const Text('Vedi tutto'),
+                      ),
+                    ],
+                  ),
+                  for (final f in feed.take(5))
+                    FeedRow(f: f, members: members, me: me?.uid),
                 ],
               ),
             ),

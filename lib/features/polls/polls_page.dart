@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/push.dart';
+import '../../core/feed.dart';
 import '../../core/theme.dart';
 import '../../core/ui.dart';
 import '../../core/undo.dart';
@@ -301,11 +301,8 @@ class _PollFormState extends State<_PollForm> {
       'votes': <String, int>{},
       'closed': false,
     });
-    Push.instance.toPartner(
-      title: '🗳️ ${Push.instance.myName} chiede',
-      body: q,
-      tag: 'polls',
-    );
+    Feed.log(widget.repo,
+        icon: '🗳️', text: 'chiede: "$q"', textMe: 'Hai chiesto: "$q"', tag: 'polls');
     Navigator.pop(context);
   }
 

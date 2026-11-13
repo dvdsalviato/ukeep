@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/feed.dart';
 import '../../core/push.dart';
 import '../../core/theme.dart';
 import '../../core/ui.dart';
@@ -74,6 +75,8 @@ void toggleTask(Repo repo, Item t) {
       next = nextRepeat(next, r);
     }
     repo.update('tasks', t.id, {'due': Timestamp.fromDate(next)});
+    Feed.log(repo,
+        icon: '🎉', text: 'ha completato "${t.str('title')}"', tag: 'done');
     return;
   }
   repo.update('tasks', t.id, {
@@ -81,6 +84,10 @@ void toggleTask(Repo repo, Item t) {
     'doneAt': done ? Timestamp.now() : null,
     'doneBy': done ? uid : null,
   });
+  if (done) {
+    Feed.log(repo,
+        icon: '🎉', text: 'ha completato "${t.str('title')}"', tag: 'done');
+  }
 }
 
 /// Scaduta: con orario dopo quell'ora, senza orario dal giorno dopo.
@@ -474,15 +481,21 @@ class _TaskFormState extends State<_TaskForm> {
     if (widget.item == null) {
       widget.repo.add('tasks', {...data, 'done': false});
       final me = FirebaseAuth.instance.currentUser?.uid;
-      if (_assignee != me) {
-        Push.instance.toPartner(
-          title: _assignee == null
-              ? '✅ Nuova attività per voi'
-              : '✅ Nuova attività per te',
-          body: '${Push.instance.myName}: $title',
-          tag: 'tasks',
-        );
-      }
+      Feed.log(
+        widget.repo,
+        icon: '✅',
+        text: _assignee == null
+            ? 'ha aggiunto un\'attività per voi: "$title"'
+            : (_assignee == me
+                ? 'ha aggiunto un\'attività: "$title"'
+                : 'ha aggiunto un\'attività per ${Push.instance.partnerName}: "$title"'),
+        push: _assignee != me,
+        pushTitle: _assignee == null
+            ? '✅ Nuova attività per voi'
+            : '✅ ${Push.instance.myName} ti ha dato un\'attività',
+        body: title,
+        tag: 'tasks',
+      );
     } else {
       widget.repo.update('tasks', widget.item!.id, data);
     }

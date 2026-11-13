@@ -20,6 +20,7 @@ flutter pub add flutter_localizations --sdk=flutter
 flutter pub add firebase_core firebase_auth cloud_firestore google_sign_in flutter_riverpod intl image_picker image shared_preferences crypto
 flutter pub add flutter_local_notifications:^19.5.0 timezone:^0.10.0
 flutter pub add firebase_messaging googleapis_auth home_widget
+flutter pub add package_info_plus url_launcher http
 flutter pub add --dev flutter_launcher_icons
 
 python3 scripts/patch_pubspec.py

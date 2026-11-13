@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import '../../core/photo.dart';
 import '../../core/theme.dart';
 import '../../core/ui.dart';
+import '../../core/update.dart';
 import '../../data/providers.dart';
 import '../tasks/tasks_page.dart';
 
@@ -231,8 +232,15 @@ class ProfilePage extends ConsumerWidget {
             children: [
               Image.asset('assets/logo.png', width: 56),
               const SizedBox(height: 6),
-              Text('Ukeep',
+              Text(
+                  AppVersion.build > 0
+                      ? 'Ukeep · build ${AppVersion.build}'
+                      : 'Ukeep',
                   style: TextStyle(color: UColors.muted, fontSize: 13)),
+              TextButton(
+                onPressed: openLatestApk,
+                child: const Text('Scarica l\'ultima versione'),
+              ),
             ],
           ),
         ),

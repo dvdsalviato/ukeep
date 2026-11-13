@@ -6,6 +6,7 @@ import 'package:intl/date_symbol_data_local.dart';
 
 import 'app.dart';
 import 'core/theme.dart';
+import 'core/update.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -13,5 +14,6 @@ Future<void> main() async {
   await Firebase.initializeApp();
   await GoogleSignIn.instance.initialize();
   await ThemeCtl.load();
+  await AppVersion.load();
   runApp(const ProviderScope(child: UkeepApp()));
 }

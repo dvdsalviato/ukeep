@@ -51,6 +51,21 @@ if "UkeepWidget" not in m:
     mp.write_text(m)
     print("AndroidManifest: widget e push configurati")
 
+# --- Apertura link (download aggiornamenti) su Android 11+
+m = mp.read_text()
+if "android.intent.action.VIEW" not in m:
+    q = (
+        "    <queries>\n"
+        "        <intent>\n"
+        '            <action android:name="android.intent.action.VIEW" />\n'
+        '            <data android:scheme="https" />\n'
+        "        </intent>\n"
+        "    </queries>\n"
+    )
+    m = m.replace("</manifest>", q + "</manifest>", 1)
+    mp.write_text(m)
+    print("AndroidManifest: apertura link configurata")
+
 # --- Gradle: core library desugaring (richiesto da flutter_local_notifications)
 gp = pathlib.Path("android/app/build.gradle.kts")
 g = gp.read_text()

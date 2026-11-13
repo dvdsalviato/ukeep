@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/theme.dart';
 import 'core/ui.dart';
+import 'core/update.dart';
 import 'data/providers.dart';
 import 'features/auth/login_page.dart';
 import 'features/couple/couple_page.dart';
@@ -62,7 +63,9 @@ class AuthGate extends ConsumerWidget {
         return couple.when(
           loading: () => const _Splash(),
           error: (e, _) => Scaffold(body: Center(child: Text('Errore: $e'))),
-          data: (id) => id == null ? const CouplePage() : HomeShell(coupleId: id),
+          data: (id) => id == null
+              ? const CouplePage()
+              : UpdateGate(coupleId: id, child: HomeShell(coupleId: id)),
         );
       },
     );

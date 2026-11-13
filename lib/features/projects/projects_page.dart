@@ -84,7 +84,7 @@ class ProjectsSection extends ConsumerWidget {
                       onDelete: () async {
                         if (await confirm(context,
                             'Eliminare il progetto segreto "${p.str('title')}"?')) {
-                          ref.read(repoProvider).remove('projects', p.id);
+                          ref.read(repoProvider)?.remove('projects', p.id);
                         }
                       },
                     )

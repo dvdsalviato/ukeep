@@ -185,7 +185,7 @@ class ListsSection extends ConsumerWidget {
                           onDelete: () async {
                             if (await confirm(context,
                                 'Eliminare la lista segreta "${l.str('name')}"?')) {
-                              ref.read(repoProvider).remove('lists', l.id);
+                              ref.read(repoProvider)?.remove('lists', l.id);
                             }
                           },
                         )

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../data/repo.dart';
@@ -17,7 +18,7 @@ class GradientBg extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -51,7 +52,7 @@ class UCard extends StatelessWidget {
     return Padding(
       padding: margin,
       child: Material(
-        color: color ?? Colors.white.withAlpha(215),
+        color: color ?? UColors.card,
         borderRadius: radius,
         child: InkWell(
           borderRadius: radius,
@@ -84,7 +85,7 @@ class PageHeader extends StatelessWidget {
                   if (subtitle != null) ...[
                     const SizedBox(height: 6),
                     Text(subtitle!,
-                        style: const TextStyle(
+                        style: TextStyle(
                             color: UColors.muted, fontSize: 15)),
                   ],
                 ],
@@ -130,7 +131,7 @@ class EmptyHint extends StatelessWidget {
             const SizedBox(height: 10),
             Text(text,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: UColors.muted, fontSize: 15)),
+                style: TextStyle(color: UColors.muted, fontSize: 15)),
           ],
         ),
       );
@@ -180,9 +181,9 @@ class UAvatar extends StatelessWidget {
   }
 }
 
-final ButtonStyle pillStyle = FilledButton.styleFrom(
+ButtonStyle get pillStyle => FilledButton.styleFrom(
   backgroundColor: UColors.dark,
-  foregroundColor: Colors.white,
+  foregroundColor: UColors.onDark,
   shape: const StadiumBorder(),
   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
   textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
@@ -196,7 +197,7 @@ Widget pillFab({
     FloatingActionButton.extended(
       onPressed: onPressed,
       backgroundColor: UColors.dark,
-      foregroundColor: Colors.white,
+      foregroundColor: UColors.onDark,
       elevation: 2,
       shape: const StadiumBorder(),
       icon: Icon(icon),
@@ -211,7 +212,7 @@ Future<T?> showUSheet<T>(BuildContext context, Widget child) {
     useSafeArea: false,
     constraints:
         BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.92),
-    backgroundColor: Colors.white,
+    backgroundColor: UColors.surface,
     shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
     builder: (ctx) {
@@ -266,7 +267,7 @@ Future<bool> confirm(BuildContext context, String message) async {
             child: const Text('Annulla')),
         TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Elimina',
+            child: Text('Elimina',
                 style: TextStyle(color: UColors.danger))),
       ],
     ),
@@ -350,7 +351,7 @@ class EmptyCard extends StatelessWidget {
                   width: 72,
                   height: 72,
                   alignment: Alignment.center,
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: LinearGradient(
                         colors: [UColors.bgTop, UColors.bgBottom],
@@ -364,7 +365,7 @@ class EmptyCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(text,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: UColors.muted, fontSize: 15)),
+                    style: TextStyle(color: UColors.muted, fontSize: 15)),
               ],
             ),
           ),
@@ -378,8 +379,93 @@ Widget templateChip(String emoji, String label, VoidCallback onTap) =>
       avatar: Text(emoji, style: const TextStyle(fontSize: 18)),
       label: Text(label),
       onPressed: onTap,
-      backgroundColor: Colors.white.withAlpha(220),
+      backgroundColor: UColors.card,
       side: BorderSide.none,
       shape: const StadiumBorder(),
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
     );
+
+/// Menu contestuale (pressione lunga): Apri / Modifica / Elimina.
+/// Dopo l'eliminazione compare "Annulla".
+Future<void> itemMenu(
+  BuildContext context, {
+  required String title,
+  VoidCallback? onOpen,
+  VoidCallback? onEdit,
+  String editLabel = 'Modifica',
+  VoidCallback? onDelete,
+}) async {
+  HapticFeedback.mediumImpact();
+  final action = await showUSheet<String>(
+    context,
+    Builder(
+      builder: (ctx) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(title,
+              maxLines: 2, overflow: TextOverflow.ellipsis, style: serif(24)),
+          const SizedBox(height: 10),
+          if (onOpen != null)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.open_in_new),
+              title: const Text('Apri'),
+              onTap: () => Navigator.pop(ctx, 'open'),
+            ),
+          if (onEdit != null)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.edit_outlined),
+              title: Text(editLabel),
+              onTap: () => Navigator.pop(ctx, 'edit'),
+            ),
+          if (onDelete != null)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.delete_outline, color: UColors.danger),
+              title: Text('Elimina',
+                  style: TextStyle(color: UColors.danger)),
+              onTap: () => Navigator.pop(ctx, 'delete'),
+            ),
+        ],
+      ),
+    ),
+  );
+  if (!context.mounted) return;
+  switch (action) {
+    case 'open':
+      onOpen?.call();
+    case 'edit':
+      onEdit?.call();
+    case 'delete':
+      onDelete?.call();
+  }
+}
+
+/// Finestrella per rinominare un testo. Restituisce il nuovo testo o null.
+Future<String?> askText(BuildContext context, String title, String initial) {
+  final c = TextEditingController(text: initial);
+  return showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: UColors.surface,
+      title: Text(title, style: serif(24)),
+      content: TextField(
+        controller: c,
+        autofocus: true,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: fieldDeco('Testo'),
+        onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annulla')),
+        TextButton(
+            onPressed: () => Navigator.pop(ctx, c.text.trim()),
+            child: const Text('Salva')),
+      ],
+    ),
+  );
+}

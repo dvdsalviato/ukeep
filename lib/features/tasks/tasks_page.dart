@@ -3,8 +3,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/push.dart';
 import '../../core/theme.dart';
 import '../../core/ui.dart';
+import '../../core/undo.dart';
 import '../../data/providers.dart';
 import '../../data/repo.dart';
 
@@ -19,11 +21,65 @@ Item? memberById(List<Item> members, String? uid) {
   return null;
 }
 
+/// Ripetizioni delle attività.
+const repeatLabels = <String, String>{
+  '': 'Mai',
+  'd': 'Ogni giorno',
+  'w': 'Ogni settimana',
+  '2w': 'Ogni 2 settimane',
+  'm': 'Ogni mese',
+  'y': 'Ogni anno',
+};
+
+DateTime nextRepeat(DateTime from, String r) {
+  final d = dayOnly(from);
+  switch (r) {
+    case 'd':
+      return d.add(const Duration(days: 1));
+    case 'w':
+      return d.add(const Duration(days: 7));
+    case '2w':
+      return d.add(const Duration(days: 14));
+    case 'm':
+      final last = DateTime(d.year, d.month + 2, 0).day;
+      return DateTime(d.year, d.month + 1, d.day > last ? last : d.day);
+    case 'y':
+      final last = DateTime(d.year + 1, d.month + 1, 0).day;
+      return DateTime(d.year + 1, d.month, d.day > last ? last : d.day);
+  }
+  return d;
+}
+
+/// Spunta un'attività. Se si ripete: salva lo storico e sposta la scadenza
+/// alla prossima volta.
 void toggleTask(Repo repo, Item t) {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
   final done = !t.flag('done');
+  final r = t.str('repeat');
+  if (done && r.isNotEmpty) {
+    repo.add('tasks', {
+      'title': t.str('title'),
+      'note': t.str('note'),
+      'assignee': t.data['assignee'],
+      'due': t.data['due'],
+      'time': t.str('time'),
+      'done': true,
+      'doneAt': Timestamp.now(),
+      'doneBy': uid,
+      'fromRepeat': t.id,
+    });
+    final today = dayOnly(DateTime.now());
+    var next = nextRepeat(t.date('due') ?? today, r);
+    while (!next.isAfter(today)) {
+      next = nextRepeat(next, r);
+    }
+    repo.update('tasks', t.id, {'due': Timestamp.fromDate(next)});
+    return;
+  }
   repo.update('tasks', t.id, {
     'done': done,
     'doneAt': done ? Timestamp.now() : null,
+    'doneBy': done ? uid : null,
   });
 }
 
@@ -61,12 +117,14 @@ class TaskRow extends StatelessWidget {
     required this.members,
     required this.onToggle,
     this.onTap,
+    this.onLongPress,
     this.compact = false,
   });
   final Item task;
   final List<Item> members;
   final VoidCallback onToggle;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final bool compact;
 
   @override
@@ -84,6 +142,7 @@ class TaskRow extends StatelessWidget {
             : 'Per ${firstName(who?.str('name')).isEmpty ? 'il partner' : firstName(who?.str('name'))}');
     return InkWell(
       onTap: onTap,
+      onLongPress: onLongPress,
       borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
@@ -129,12 +188,20 @@ class TaskRow extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
                       child: Text(
-                          task.str('note').isEmpty
-                              ? forLabel
-                              : '$forLabel · ${task.str('note')}',
+                          [
+                            if (done && task.str('doneBy').isNotEmpty)
+                              task.str('doneBy') == meUid
+                                  ? 'Fatto da te'
+                                  : 'Fatto da ${firstName(memberById(members, task.str('doneBy'))?.str('name')).isEmpty ? 'il partner' : firstName(memberById(members, task.str('doneBy'))?.str('name'))}'
+                            else
+                              forLabel,
+                            if (task.str('repeat').isNotEmpty)
+                              '🔁 ${repeatLabels[task.str('repeat')] ?? ''}',
+                            if (task.str('note').isNotEmpty) task.str('note'),
+                          ].join(' · '),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                               color: UColors.muted, fontSize: 13.5)),
                     ),
                 ],
@@ -239,11 +306,11 @@ class _TasksPageState extends ConsumerState<TasksPage> {
                     selectedColor: UColors.dark,
                     labelStyle: TextStyle(
                         color:
-                            _filter == e.key ? Colors.white : UColors.ink,
+                            _filter == e.key ? UColors.onDark : UColors.ink,
                         fontWeight: FontWeight.w600),
                     showCheckmark: false,
                     shape: const StadiumBorder(),
-                    backgroundColor: Colors.white.withAlpha(200),
+                    backgroundColor: UColors.card,
                     side: BorderSide.none,
                   ),
               ],
@@ -271,13 +338,14 @@ class _TasksPageState extends ConsumerState<TasksPage> {
                         background: Container(
                           alignment: Alignment.centerRight,
                           padding: const EdgeInsets.only(right: 12),
-                          child: const Icon(Icons.delete_outline,
+                          child: Icon(Icons.delete_outline,
                               color: UColors.danger),
                         ),
-                        confirmDismiss: (_) =>
-                            confirm(context, 'Eliminare "${shown[i].str('title')}"?'),
-                        onDismissed: (_) =>
-                            repo?.remove('tasks', shown[i].id),
+                        onDismissed: (_) {
+                          if (repo != null) {
+                            deleteItem(context, repo, 'tasks', shown[i]);
+                          }
+                        },
                         child: TaskRow(
                           task: shown[i],
                           members: members,
@@ -288,6 +356,15 @@ class _TasksPageState extends ConsumerState<TasksPage> {
                               ? null
                               : () => showTaskSheet(context, repo, members,
                                   item: shown[i]),
+                          onLongPress: repo == null
+                              ? null
+                              : () => itemMenu(context,
+                                  title: shown[i].str('title'),
+                                  onEdit: () => showTaskSheet(
+                                      context, repo, members,
+                                      item: shown[i]),
+                                  onDelete: () => deleteItem(
+                                      context, repo, 'tasks', shown[i])),
                         ),
                       ),
                       if (i < shown.length - 1)
@@ -335,6 +412,7 @@ class _TaskFormState extends State<_TaskForm> {
       TextEditingController(text: widget.item?.str('note'));
   DateTime? _due;
   String _time = '';
+  String _repeat = '';
   String? _assignee;
 
   @override
@@ -342,6 +420,7 @@ class _TaskFormState extends State<_TaskForm> {
     super.initState();
     _due = widget.item?.date('due');
     _time = widget.item?.str('time') ?? '';
+    _repeat = widget.item?.str('repeat') ?? '';
     _assignee = widget.item?.data['assignee'] as String?;
   }
 
@@ -383,15 +462,27 @@ class _TaskFormState extends State<_TaskForm> {
   void _save() {
     final title = _title.text.trim();
     if (title.isEmpty) return;
+    if (_repeat.isNotEmpty) _due ??= dayOnly(DateTime.now());
     final data = <String, dynamic>{
       'title': title,
       'note': _note.text.trim(),
       'due': _due == null ? null : Timestamp.fromDate(_due!),
       'time': _due == null ? '' : _time,
       'assignee': _assignee,
+      'repeat': _repeat,
     };
     if (widget.item == null) {
       widget.repo.add('tasks', {...data, 'done': false});
+      final me = FirebaseAuth.instance.currentUser?.uid;
+      if (_assignee != me) {
+        Push.instance.toPartner(
+          title: _assignee == null
+              ? '✅ Nuova attività per voi'
+              : '✅ Nuova attività per te',
+          body: '${Push.instance.myName}: $title',
+          tag: 'tasks',
+        );
+      }
     } else {
       widget.repo.update('tasks', widget.item!.id, data);
     }
@@ -465,6 +556,24 @@ class _TaskFormState extends State<_TaskForm> {
           ],
         ),
         const SizedBox(height: 16),
+        const Text('Si ripete', style: TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            for (final e in repeatLabels.entries)
+              ChoiceChip(
+                label: Text(e.value),
+                selected: _repeat == e.key,
+                onSelected: (_) => setState(() {
+                  _repeat = e.key;
+                  if (e.key.isNotEmpty) _due ??= dayOnly(DateTime.now());
+                }),
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
         const Text('Per chi è',
             style: TextStyle(fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
@@ -506,10 +615,10 @@ class _TaskFormState extends State<_TaskForm> {
             if (widget.item != null)
               IconButton(
                 onPressed: () {
-                  widget.repo.remove('tasks', widget.item!.id);
+                  deleteItem(context, widget.repo, 'tasks', widget.item!);
                   Navigator.pop(context);
                 },
-                icon: const Icon(Icons.delete_outline, color: UColors.danger),
+                icon: Icon(Icons.delete_outline, color: UColors.danger),
               ),
             Expanded(
               child: FilledButton(

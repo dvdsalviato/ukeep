@@ -35,6 +35,23 @@ final listsProvider = _collection('lists');
 final wishesProvider = _collection('wishes');
 final eventsProvider = _collection('events');
 final projectsProvider = _collection('projects');
+final expensesProvider = _collection('expenses');
+final pollsProvider = _collection('polls');
+final memoriesProvider = _collection('memories');
+
+/// L'ultimo abbraccio mandato (da uno dei due).
+final lastHugProvider = StreamProvider<Item?>((ref) {
+  final repo = ref.watch(repoProvider);
+  if (repo == null) return Stream.value(null);
+  return repo
+      .col('hugs')
+      .orderBy('at', descending: true)
+      .limit(1)
+      .snapshots()
+      .map((s) => s.docs.isEmpty
+          ? null
+          : Item(s.docs.first.id, s.docs.first.data()));
+});
 
 /// I due profili (nome, foto) dello spazio condiviso.
 final membersProvider = StreamProvider<List<Item>>((ref) {

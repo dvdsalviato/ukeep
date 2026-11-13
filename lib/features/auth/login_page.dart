@@ -42,7 +42,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               const SizedBox(height: 12),
               Text('Ukeep', style: serif(52)),
               const SizedBox(height: 10),
-              const Text(
+              Text(
                 'Le cose di entrambi,\nin un posto solo.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: UColors.muted, fontSize: 17),
@@ -54,11 +54,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   style: pillStyle,
                   onPressed: _loading ? null : _signIn,
                   icon: _loading
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 18,
                           height: 18,
                           child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white))
+                              strokeWidth: 2, color: UColors.onDark))
                       : const Icon(Icons.login),
                   label: const Text('Continua con Google'),
                 ),

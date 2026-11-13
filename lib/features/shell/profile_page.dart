@@ -53,10 +53,10 @@ class ProfilePage extends ConsumerWidget {
                         bottom: -2,
                         child: Container(
                           padding: const EdgeInsets.all(5),
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                               color: UColors.dark, shape: BoxShape.circle),
-                          child: const Icon(Icons.photo_camera,
-                              size: 14, color: Colors.white),
+                          child: Icon(Icons.photo_camera,
+                              size: 14, color: UColors.onDark),
                         ),
                       ),
                     ],
@@ -70,7 +70,7 @@ class ProfilePage extends ConsumerWidget {
                       Text(user.displayName ?? '', style: serif(24)),
                       const SizedBox(height: 2),
                       Text(user.email ?? '',
-                          style: const TextStyle(color: UColors.muted)),
+                          style: TextStyle(color: UColors.muted)),
                     ],
                   ),
                 ),
@@ -99,7 +99,7 @@ class ProfilePage extends ConsumerWidget {
                     ],
                   )
                 else ...[
-                  const Text(
+                  Text(
                       'Manca ancora il tuo partner. Mandagli questo codice:',
                       style: TextStyle(color: UColors.muted)),
                   const SizedBox(height: 10),
@@ -150,7 +150,7 @@ class ProfilePage extends ConsumerWidget {
                       ? 'Non ancora impostata'
                       : '${DateFormat('d MMMM y', 'it_IT').format(since)} · ${togetherText(since).replaceFirst('Insieme da ', '')}'),
                   trailing: Text(since == null ? 'Imposta' : 'Cambia',
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: UColors.accent, fontWeight: FontWeight.w700)),
                   onTap: repo == null
                       ? null
@@ -168,10 +168,58 @@ class ProfilePage extends ConsumerWidget {
                 ),
                 Divider(height: 1, color: UColors.muted.withAlpha(40)),
                 ListTile(
-                  leading: const Icon(Icons.logout, color: UColors.danger),
-                  title: const Text('Esci',
-                      style: TextStyle(color: UColors.danger)),
+                  leading: const Icon(Icons.logout),
+                  title: const Text('Esci (disconnetti)'),
                   onTap: () => ref.read(authServiceProvider).signOut(),
+                ),
+                Divider(height: 1, color: UColors.muted.withAlpha(40)),
+                ListTile(
+                  leading: Icon(Icons.heart_broken_outlined,
+                      color: UColors.danger),
+                  title: Text('Lascia la coppia',
+                      style: TextStyle(color: UColors.danger)),
+                  subtitle: const Text(
+                      'Esci da questo spazio: i dati restano al partner'),
+                  onTap: () async {
+                    final ok = await _sure(
+                        context,
+                        'Lasciare la coppia?',
+                        'Non vedrai più liste, attività e ricordi condivisi. '
+                            'Il partner li conserva. Potrai creare o unirti '
+                            'a un altro spazio.',
+                        'Lascia');
+                    if (!ok) return;
+                    await ref
+                        .read(coupleServiceProvider)
+                        .leaveCouple(user.uid, coupleId);
+                  },
+                ),
+                Divider(height: 1, color: UColors.muted.withAlpha(40)),
+                ListTile(
+                  leading: Icon(Icons.delete_forever_outlined,
+                      color: UColors.danger),
+                  title: Text('Elimina account',
+                      style: TextStyle(color: UColors.danger)),
+                  subtitle: const Text('Per sempre: ti chiederà di riconfermare Google'),
+                  onTap: () async {
+                    final ok = await _sure(
+                        context,
+                        'Eliminare l\'account?',
+                        'Il tuo profilo e il tuo accesso vengono cancellati '
+                            'per sempre. I dati condivisi restano al partner.',
+                        'Elimina');
+                    if (!ok) return;
+                    try {
+                      await ref
+                          .read(authServiceProvider)
+                          .deleteAccount(coupleId);
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text('Non riuscito: $e')));
+                      }
+                    }
+                  },
                 ),
               ],
             ),
@@ -183,7 +231,7 @@ class ProfilePage extends ConsumerWidget {
             children: [
               Image.asset('assets/logo.png', width: 56),
               const SizedBox(height: 6),
-              const Text('Ukeep',
+              Text('Ukeep',
                   style: TextStyle(color: UColors.muted, fontSize: 13)),
             ],
           ),
@@ -191,4 +239,24 @@ class ProfilePage extends ConsumerWidget {
       ],
     );
   }
+}
+
+Future<bool> _sure(
+    BuildContext context, String title, String text, String action) async {
+  final r = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(title),
+      content: Text(text),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annulla')),
+        TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(action, style: TextStyle(color: UColors.danger))),
+      ],
+    ),
+  );
+  return r ?? false;
 }

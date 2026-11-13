@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -14,26 +15,34 @@ class UkeepApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Ukeep',
-      debugShowCheckedModeBanner: false,
-      theme: buildTheme(),
-      locale: const Locale('it', 'IT'),
-      supportedLocales: const [Locale('it', 'IT')],
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      builder: (context, child) {
-        final mq = MediaQuery.of(context);
-        final sys = mq.textScaler.scale(1.0);
-        return MediaQuery(
-          data: mq.copyWith(textScaler: TextScaler.linear(sys * 0.9)),
-          child: GradientBg(child: child ?? const SizedBox.shrink()),
-        );
-      },
-      home: const AuthGate(),
+    return ValueListenableBuilder<bool>(
+      valueListenable: ThemeCtl.dark,
+      builder: (context, dark, _) => MaterialApp(
+        // cambiando tema si ricostruisce tutto con i nuovi colori
+        key: ValueKey(dark),
+        title: 'Ukeep',
+        debugShowCheckedModeBanner: false,
+        theme: buildTheme(),
+        locale: const Locale('it', 'IT'),
+        supportedLocales: const [Locale('it', 'IT')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        builder: (context, child) {
+          final mq = MediaQuery.of(context);
+          final sys = mq.textScaler.scale(1.0);
+          return AnnotatedRegion<SystemUiOverlayStyle>(
+            value: systemBars,
+            child: MediaQuery(
+              data: mq.copyWith(textScaler: TextScaler.linear(sys * 0.9)),
+              child: GradientBg(child: child ?? const SizedBox.shrink()),
+            ),
+          );
+        },
+        home: const AuthGate(),
+      ),
     );
   }
 }

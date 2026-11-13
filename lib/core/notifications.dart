@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 import '../data/repo.dart';
+import 'push.dart';
 import 'theme.dart';
 import 'ui.dart';
 
@@ -68,7 +69,10 @@ class NotifService {
       lead: prefs.getInt('n_lead') ?? 15,
     );
     _ready = true;
-    if (settings.value.enabled) await requestPermission();
+    try {
+      await _partnerChannel();
+    } catch (_) {}
+    await requestPermission();
   }
 
   Future<void> requestPermission() async {
@@ -150,6 +154,53 @@ class NotifService {
         _details());
   }
 
+  /// Toglie le notifiche delle attività (non quelle arrivate dal partner).
+  Future<void> _clearOwn() async {
+    final pend = await _plugin.pendingNotificationRequests();
+    for (final p in pend) {
+      await _plugin.cancel(p.id);
+    }
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    final act = await android?.getActiveNotifications() ?? <ActiveNotification>[];
+    for (final a in act) {
+      if (a.channelId == 'ukeep_partner') continue;
+      final int? id = a.id;
+      if (id == null) continue;
+      await _plugin.cancel(id, tag: a.tag);
+    }
+  }
+
+  /// Mostra subito una notifica arrivata dal partner (app aperta).
+  Future<void> showPartner(String title, String body) async {
+    if (!_ready) return;
+    await _plugin.show(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000 % 100000000,
+      title,
+      body,
+      const NotificationDetails(
+        android: AndroidNotificationDetails('ukeep_partner', 'Dal partner',
+            channelDescription: 'Abbracci e novità dal partner',
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: 'ic_stat',
+            color: _accent),
+      ),
+    );
+  }
+
+  /// Crea il canale per le notifiche del partner (serve anche alle push).
+  Future<void> _partnerChannel() async {
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    await android?.createNotificationChannel(const AndroidNotificationChannel(
+      'ukeep_partner',
+      'Dal partner',
+      description: 'Abbracci e novità dal partner',
+      importance: Importance.high,
+    ));
+  }
+
   Future<void> sync(List<Item> tasks, String? uid, {bool force = false}) async {
     _tasks = tasks;
     _uid = uid;
@@ -173,7 +224,7 @@ class NotifService {
     _lastSig = sig;
 
     try {
-      await _plugin.cancelAll();
+      await _clearOwn();
       if (!s.enabled) return;
 
       // --- scadute: restano in alto finché non vengono fatte
@@ -283,6 +334,19 @@ class _NotifSheet extends StatelessWidget {
             activeColor: UColors.dark,
             onChanged: (v) => svc.update(s.copyWith(enabled: v)),
           ),
+          ValueListenableBuilder<bool>(
+            valueListenable: Push.instance.receive,
+            builder: (context, on, _) => SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Avvisi dal partner'),
+              subtitle: Text(Push.instance.configured
+                  ? 'Abbracci, umore, cose aggiunte alle liste'
+                  : 'Da attivare: manca la chiave per le notifiche'),
+              value: on,
+              activeThumbColor: UColors.dark,
+              onChanged: (v) => Push.instance.setReceive(v),
+            ),
+          ),
           if (s.enabled) ...[
             ListTile(
               contentPadding: EdgeInsets.zero,
@@ -332,7 +396,7 @@ class _NotifSheet extends StatelessWidget {
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
                 shape: const StadiumBorder(),
-                side: const BorderSide(color: UColors.dark),
+                side: BorderSide(color: UColors.dark),
                 foregroundColor: UColors.dark,
               ),
               onPressed: svc.test,

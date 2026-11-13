@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme.dart';
 import '../../core/ui.dart';
+import '../../core/undo.dart';
 import '../../data/providers.dart';
 import '../../data/repo.dart';
 import '../tasks/tasks_page.dart';
@@ -67,7 +68,7 @@ class _WishesSectionState extends ConsumerState<WishesSection> {
               viewingPartner
                   ? 'Spunta quello che hai già preso: solo tu vedi la spunta.'
                   : 'Quello che vorresti ricevere: così i regali fanno centro.',
-              style: const TextStyle(color: UColors.muted),
+              style: TextStyle(color: UColors.muted),
             ),
           ),
         ),
@@ -93,6 +94,13 @@ class _WishesSectionState extends ConsumerState<WishesSection> {
                       onTap: (repo == null || viewingPartner)
                           ? null
                           : () => showWishSheet(context, repo, item: w),
+                      onLongPress: (repo == null || viewingPartner)
+                          ? null
+                          : () => itemMenu(context,
+                              title: w.str('title'),
+                              onEdit: () =>
+                                  showWishSheet(context, repo, item: w),
+                              onDelete: () => deleteItem(context, repo, 'wishes', w)),
                       child: Row(
                         children: [
                           if (viewingPartner)
@@ -129,7 +137,7 @@ class _WishesSectionState extends ConsumerState<WishesSection> {
                                 ),
                                 if (w.str('note').isNotEmpty)
                                   Text(w.str('note'),
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                           color: UColors.muted)),
                                 if (w.str('link').isNotEmpty)
                                   GestureDetector(
@@ -145,7 +153,7 @@ class _WishesSectionState extends ConsumerState<WishesSection> {
                                       child: Text(w.str('link'),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                               color: UColors.lilac,
                                               decoration:
                                                   TextDecoration.underline)),
@@ -158,7 +166,7 @@ class _WishesSectionState extends ConsumerState<WishesSection> {
                             Padding(
                               padding: const EdgeInsets.only(left: 10),
                               child: Text(w.str('price'),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                       fontWeight: FontWeight.w700,
                                       color: UColors.accent)),
                             ),
@@ -260,10 +268,10 @@ class _WishFormState extends State<_WishForm> {
             if (widget.item != null)
               IconButton(
                 onPressed: () {
-                  widget.repo.remove('wishes', widget.item!.id);
+                  deleteItem(context, widget.repo, 'wishes', widget.item!);
                   Navigator.pop(context);
                 },
-                icon: const Icon(Icons.delete_outline, color: UColors.danger),
+                icon: Icon(Icons.delete_outline, color: UColors.danger),
               ),
             Expanded(
               child: FilledButton(

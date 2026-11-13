@@ -60,7 +60,7 @@ class _CouplePageState extends ConsumerState<CouplePage> {
             Text('Ciao${first.isEmpty ? '' : ', $first'}',
                 textAlign: TextAlign.center, style: serif(38)),
             const SizedBox(height: 10),
-            const Text(
+            Text(
               'Crea il vostro spazio condiviso oppure entra in quello '
               'del tuo partner con il codice invito.',
               textAlign: TextAlign.center,
@@ -73,7 +73,7 @@ class _CouplePageState extends ConsumerState<CouplePage> {
                 children: [
                   Text('Nuovo spazio', style: serif(24)),
                   const SizedBox(height: 6),
-                  const Text('Lo crei tu e poi inviti il partner.',
+                  Text('Lo crei tu e poi inviti il partner.',
                       style: TextStyle(color: UColors.muted)),
                   const SizedBox(height: 14),
                   FilledButton(
@@ -103,7 +103,7 @@ class _CouplePageState extends ConsumerState<CouplePage> {
                     style: OutlinedButton.styleFrom(
                       shape: const StadiumBorder(),
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      side: const BorderSide(color: UColors.dark),
+                      side: BorderSide(color: UColors.dark),
                       foregroundColor: UColors.dark,
                     ),
                     onPressed: _busy

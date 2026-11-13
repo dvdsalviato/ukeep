@@ -5,11 +5,13 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'app.dart';
+import 'core/theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('it_IT');
   await Firebase.initializeApp();
   await GoogleSignIn.instance.initialize();
+  await ThemeCtl.load();
   runApp(const ProviderScope(child: UkeepApp()));
 }

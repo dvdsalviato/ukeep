@@ -1,16 +1,20 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/push.dart';
 import '../../core/secret.dart';
+import '../../core/sub_items.dart';
 import '../../core/theme.dart';
 import '../../core/ui.dart';
+import '../../core/undo.dart';
 import '../../data/providers.dart';
 import '../../data/repo.dart';
+import '../expenses/expenses_page.dart';
+import '../polls/polls_page.dart';
 import '../projects/projects_page.dart';
 import '../wishes/wishes_page.dart';
 
-/// Scheda "Liste": contiene Liste, Desideri e Progetti.
+/// Scheda "Liste": Liste, Desideri, Progetti, Spese e Sondaggi.
 class ListsHub extends ConsumerWidget {
   const ListsHub({super.key});
 
@@ -28,9 +32,16 @@ class ListsHub extends ConsumerWidget {
           } else if (seg == 1) {
             label = 'Nuovo desiderio';
             add = () => showWishSheet(context, repo);
-          } else {
+          } else if (seg == 2) {
             label = 'Nuovo progetto';
             add = () => showProjectSheet(context, repo);
+          } else if (seg == 3) {
+            label = 'Nuova spesa';
+            final members = ref.read(membersProvider).value ?? [];
+            add = () => showExpenseSheet(context, repo, members);
+          } else {
+            label = 'Nuovo sondaggio';
+            add = () => showPollSheet(context, repo);
           }
         }
         return Scaffold(
@@ -41,14 +52,13 @@ class ListsHub extends ConsumerWidget {
             children: [
               const PageHeader(
                   title: 'Liste', subtitle: 'Tutto quello che condividete'),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _Seg(value: seg, onChanged: (v) => listsSegment.value = v),
-              ),
+              _Seg(value: seg, onChanged: (v) => listsSegment.value = v),
               const SizedBox(height: 12),
               if (seg == 0) const ListsSection(),
               if (seg == 1) const WishesSection(),
               if (seg == 2) const ProjectsSection(),
+              if (seg == 3) const ExpensesSection(),
+              if (seg == 4) const PollsSection(),
             ],
           ),
         );
@@ -64,32 +74,29 @@ class _Seg extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const labels = ['Liste', 'Desideri', 'Progetti'];
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: Colors.white.withAlpha(190),
-        borderRadius: BorderRadius.circular(30),
-      ),
+    const labels = ['📝 Liste', '⭐ Desideri', '🎯 Progetti', '💸 Spese', '🗳️ Sondaggi'];
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
           for (var i = 0; i < labels.length; i++)
-            Expanded(
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
               child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
                 onTap: () => onChanged(i),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(vertical: 11),
-                  alignment: Alignment.center,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
-                    color: value == i ? UColors.dark : Colors.transparent,
+                    color: value == i ? UColors.dark : UColors.card,
                     borderRadius: BorderRadius.circular(26),
                   ),
                   child: Text(labels[i],
                       style: TextStyle(
                           fontWeight: FontWeight.w700,
-                          color: value == i ? Colors.white : UColors.ink)),
+                          color: value == i ? UColors.onDark : UColors.ink)),
                 ),
               ),
             ),
@@ -99,14 +106,13 @@ class _Seg extends StatelessWidget {
   }
 }
 
-List<Map<String, dynamic>> _items(Item l) => l.steps('items');
-
 class ListsSection extends ConsumerWidget {
   const ListsSection({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final repo = ref.watch(repoProvider);
+    if (repo == null) return const SizedBox.shrink();
     final lists = [...(ref.watch(listsProvider).value ?? <Item>[])]..sort(
         (a, b) => (a.date('createdAt') ?? DateTime(2100))
             .compareTo(b.date('createdAt') ?? DateTime(2100)));
@@ -135,8 +141,7 @@ class ListsSection extends ConsumerWidget {
                 children: [
                   for (final t in missing)
                     templateChip(t[0], t[1], () {
-                      repo?.add('lists',
-                          {'name': t[1], 'icon': t[0], 'items': []});
+                      repo.add('lists', {'name': t[1], 'icon': t[0]});
                     }),
                 ],
               ),
@@ -182,18 +187,31 @@ class ListsSection extends ConsumerWidget {
                                       ListDetailPage(listId: l.id)));
                             }
                           },
-                          onDelete: () async {
-                            if (await confirm(context,
-                                'Eliminare la lista segreta "${l.str('name')}"?')) {
-                              ref.read(repoProvider)?.remove('lists', l.id);
-                            }
-                          },
+                          onDelete: () => deleteItem(context, repo, 'lists', l,
+                              label: l.str('name')),
                         )
                       : UCard(
                     onTap: () => Navigator.of(context).push(MaterialPageRoute(
                         builder: (_) => ListDetailPage(listId: l.id))),
-                    child: Builder(builder: (context) {
-                      final items = _items(l);
+                    onLongPress: () => itemMenu(context,
+                            title: l.str('name'),
+                            onOpen: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                    builder: (_) =>
+                                        ListDetailPage(listId: l.id))),
+                            onEdit: () =>
+                                showListSheet(context, repo, item: l),
+                            onDelete: () => deleteItem(
+                                context, repo, 'lists', l,
+                                label: l.str('name'))),
+                    child: SubItemsBuilder(
+                        items: SubItems(repo, 'lists', l.id, 'items'),
+                        parentItem: l,
+                        legacyField: 'items',
+                        builder: (context, subs) {
+                      final items = [
+                        for (final x in subs) {'t': x.str('t'), 'd': x.flag('d')}
+                      ];
                       final done = items.where((i) => i['d'] == true).length;
                       final open =
                           items.where((i) => i['d'] != true).take(2).toList();
@@ -208,7 +226,7 @@ class ListsSection extends ConsumerWidget {
                                 alignment: Alignment.center,
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(18),
-                                  gradient: const LinearGradient(
+                                  gradient: LinearGradient(
                                       colors: [
                                         UColors.bgTop,
                                         UColors.bgBottom
@@ -231,13 +249,13 @@ class ListsSection extends ConsumerWidget {
                                         items.isEmpty
                                             ? 'Vuota: tocca per aggiungere'
                                             : '$done di ${items.length} fatti',
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                             color: UColors.muted,
                                             fontSize: 13.5)),
                                   ],
                                 ),
                               ),
-                              const Icon(Icons.chevron_right,
+                              Icon(Icons.chevron_right,
                                   color: UColors.muted),
                             ],
                           ),
@@ -309,8 +327,7 @@ class _ListFormState extends State<_ListForm> {
       if (!_secret && wasSecret) ...secretFields(null),
     };
     if (widget.item == null) {
-      widget.repo.add('lists',
-          {'name': name, 'icon': _icon, 'items': [], ...sec});
+      widget.repo.add('lists', {'name': name, 'icon': _icon, ...sec});
     } else {
       widget.repo.update(
           'lists', widget.item!.id, {'name': name, 'icon': _icon, ...sec});
@@ -377,53 +394,24 @@ class _ListFormState extends State<_ListForm> {
   }
 }
 
-class ListDetailPage extends ConsumerStatefulWidget {
+class ListDetailPage extends ConsumerWidget {
   const ListDetailPage({super.key, required this.listId});
   final String listId;
 
   @override
-  ConsumerState<ListDetailPage> createState() => _ListDetailPageState();
-}
-
-class _ListDetailPageState extends ConsumerState<ListDetailPage> {
-  final _input = TextEditingController();
-
-  @override
-  void dispose() {
-    _input.dispose();
-    super.dispose();
-  }
-
-  void _set(Repo repo, List<Map<String, dynamic>> items) =>
-      repo.update('lists', widget.listId, {'items': items});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final repo = ref.watch(repoProvider);
     final lists = ref.watch(listsProvider).value ?? [];
-    Item? list;
+    final members = ref.watch(membersProvider).value ?? [];
+    Item? found;
     for (final l in lists) {
-      if (l.id == widget.listId) list = l;
+      if (l.id == listId) found = l;
     }
-    if (list == null || repo == null) {
+    if (found == null || repo == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    final items = _items(list);
-    final order = [
-      ...List.generate(items.length, (i) => i).where((i) => items[i]['d'] != true),
-      ...List.generate(items.length, (i) => i).where((i) => items[i]['d'] == true),
-    ];
-    final doneCount = items.where((i) => i['d'] == true).length;
-
-    void add() {
-      final t = _input.text.trim();
-      if (t.isEmpty) return;
-      _set(repo, [
-        ...items,
-        {'t': t, 'd': false}
-      ]);
-      _input.clear();
-    }
+    final Item list = found;
+    final subs = SubItems(repo, 'lists', list.id, 'items');
 
     return Scaffold(
       appBar: AppBar(
@@ -433,18 +421,14 @@ class _ListDetailPageState extends ConsumerState<ListDetailPage> {
             onSelected: (v) async {
               if (v == 'rename') {
                 showListSheet(context, repo, item: list);
-              } else if (v == 'clear') {
-                _set(repo, items.where((i) => i['d'] != true).toList());
               } else if (v == 'delete') {
-                if (await confirm(context, 'Eliminare la lista "${list!.str('name')}"?')) {
-                  repo.remove('lists', widget.listId);
-                  if (context.mounted) Navigator.pop(context);
-                }
+                deleteItem(context, repo, 'lists', list,
+                    label: list.str('name'));
+                Navigator.pop(context);
               }
             },
             itemBuilder: (_) => const [
               PopupMenuItem(value: 'rename', child: Text('Modifica')),
-              PopupMenuItem(value: 'clear', child: Text('Rimuovi i completati')),
               PopupMenuItem(value: 'delete', child: Text('Elimina lista')),
             ],
           ),
@@ -453,86 +437,22 @@ class _ListDetailPageState extends ConsumerState<ListDetailPage> {
       body: ListView(
         padding: EdgeInsets.fromLTRB(16, 8, 16, 40 + bottomInset(context)),
         children: [
-          UCard(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _input,
-                    textCapitalization: TextCapitalization.sentences,
-                    onSubmitted: (_) => add(),
-                    decoration: const InputDecoration(
-                        hintText: 'Aggiungi un elemento…',
-                        border: InputBorder.none),
-                  ),
-                ),
-                IconButton.filled(
-                  style: IconButton.styleFrom(backgroundColor: UColors.dark),
-                  onPressed: add,
-                  icon: const Icon(Icons.add),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          if (items.isEmpty)
-            const EmptyHint(Icons.playlist_add, 'La lista è vuota. Scrivi qui sopra il primo elemento.')
-          else
-            UCard(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              child: Column(
-                children: [
-                  for (final i in order)
-                    Dismissible(
-                      key: ValueKey('${widget.listId}-$i-${items[i]['t']}'),
-                      direction: DismissDirection.endToStart,
-                      background: Container(
-                        alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.only(right: 12),
-                        child: const Icon(Icons.delete_outline,
-                            color: UColors.danger),
-                      ),
-                      onDismissed: (_) {
-                        final next = [...items]..removeAt(i);
-                        _set(repo, next);
-                      },
-                      child: CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        activeColor: UColors.accent,
-                        shape: const CircleBorder(),
-                        value: items[i]['d'] == true,
-                        onChanged: (v) {
-                          final next = [...items];
-                          next[i] = {...next[i], 'd': v == true};
-                          _set(repo, next);
-                        },
-                        title: Text(
-                          '${items[i]['t']}',
-                          style: TextStyle(
-                            fontSize: 16.5,
-                            decoration: items[i]['d'] == true
-                                ? TextDecoration.lineThrough
-                                : null,
-                            color: items[i]['d'] == true
-                                ? UColors.muted
-                                : UColors.ink,
-                          ),
-                        ),
-                      ),
+          SubItemsPanel(
+            items: subs,
+            parentItem: list,
+            legacyField: 'items',
+            members: members,
+            hint: 'Aggiungi un elemento…',
+            emptyIcon: Icons.playlist_add,
+            emptyText: 'La lista è vuota. Scrivi qui sopra il primo elemento.',
+            onAdded: isLocked(list)
+                ? null
+                : (t) => Push.instance.toPartner(
+                      title: '${list.str('icon', '📝')} ${list.str('name')}',
+                      body: '${Push.instance.myName} ha aggiunto "$t"',
+                      tag: 'list-${list.id}',
                     ),
-                ],
-              ),
-            ),
-          if (doneCount > 0)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Center(
-                child: Text('$doneCount di ${items.length} fatti',
-                    style: const TextStyle(color: UColors.muted)),
-              ),
-            ),
+          ),
         ],
       ),
     );

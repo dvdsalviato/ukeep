@@ -99,7 +99,7 @@ class _PinEntryState extends State<PinEntry> {
             child: Center(
               child: Text(widget.message ?? '',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: UColors.danger, fontSize: 13.5)),
             ),
           ),
@@ -145,7 +145,7 @@ class _VerifyPinState extends State<_VerifyPin> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: Colors.white,
+      backgroundColor: UColors.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       title: Text(widget.title, textAlign: TextAlign.center, style: serif(24)),
       content: PinEntry(
@@ -190,7 +190,7 @@ class _ChoosePinState extends State<_ChoosePin> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: Colors.white,
+      backgroundColor: UColors.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       title: Text(_first == null ? 'Scegli un PIN' : 'Ripeti il PIN',
           textAlign: TextAlign.center, style: serif(24)),
@@ -202,7 +202,7 @@ class _ChoosePinState extends State<_ChoosePin> {
                 ? '6 numeri. Non si può recuperare: ricordalo o annotalo.'
                 : 'Scrivilo di nuovo per conferma.',
             textAlign: TextAlign.center,
-            style: const TextStyle(color: UColors.muted, fontSize: 14),
+            style: TextStyle(color: UColors.muted, fontSize: 14),
           ),
           const SizedBox(height: 14),
           PinEntry(
@@ -319,7 +319,10 @@ class LockedCard extends StatelessWidget {
     final mine = isMine(item);
     return UCard(
       onTap: mine ? onOpen : null,
-      onLongPress: mine ? onDelete : null,
+      onLongPress: mine
+          ? () => itemMenu(context,
+              title: item.str(titleKey), onOpen: onOpen, onDelete: onDelete)
+          : null,
       child: Row(
         children: [
           Container(
@@ -341,9 +344,9 @@ class LockedCard extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                     mine
-                        ? 'Tocca e inserisci il PIN · tieni premuto per eliminare'
+                        ? 'Tocca e inserisci il PIN'
                         : 'Solo chi l\'ha creata può aprirla',
-                    style: const TextStyle(
+                    style: TextStyle(
                         color: UColors.muted, fontSize: 13)),
               ],
             ),

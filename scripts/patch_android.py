@@ -32,6 +32,25 @@ if "ScheduledNotificationReceiver" not in m:
     mp.write_text(m)
     print("AndroidManifest: notifiche configurate")
 
+# --- Widget per la schermata Home e notifiche push (FCM)
+m = mp.read_text()
+if "UkeepWidget" not in m:
+    extra = (
+        '        <receiver android:name=".UkeepWidget" android:exported="true">\n'
+        "            <intent-filter>\n"
+        '                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />\n'
+        "            </intent-filter>\n"
+        '            <meta-data android:name="android.appwidget.provider" android:resource="@xml/ukeep_widget_info" />\n'
+        "        </receiver>\n"
+        '        <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@drawable/ic_stat" />\n'
+        '        <meta-data android:name="com.google.firebase.messaging.default_notification_color" android:resource="@color/ukeep_accent" />\n'
+        '        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="ukeep_partner" />\n'
+        "    "
+    )
+    m = m.replace("</application>", extra + "</application>", 1)
+    mp.write_text(m)
+    print("AndroidManifest: widget e push configurati")
+
 # --- Gradle: core library desugaring (richiesto da flutter_local_notifications)
 gp = pathlib.Path("android/app/build.gradle.kts")
 g = gp.read_text()

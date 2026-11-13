@@ -1,8 +1,14 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+import '../../core/mood.dart';
 import '../../core/notifications.dart';
+import '../../core/push.dart';
+import '../../core/widget_sync.dart';
 import '../../core/theme.dart';
 import '../../core/ui.dart';
 import '../../data/providers.dart';
@@ -28,7 +34,59 @@ class _HomeShellState extends ConsumerState<HomeShell>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    NotifService.instance.init().then((_) => _syncNotifs());
+    NotifService.instance.init().then((_) {
+      _syncNotifs();
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) Push.instance.init(uid);
+      final m = ref.read(membersProvider).value;
+      if (m != null) Push.instance.setMembers(m, uid);
+      _syncWidget();
+      _checkMood();
+    });
+  }
+
+  bool _moodAsked = false;
+
+  void _checkMood() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final members = ref.read(membersProvider).value;
+    if (uid == null || members == null || members.isEmpty) return;
+    _moodAsked = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) maybeAskMood(context, members, uid);
+    });
+  }
+
+  void _syncWidget() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final tasks = ref.read(tasksProvider).value ?? [];
+    final events = ref.read(eventsProvider).value ?? [];
+    final couple = ref.read(coupleDocProvider).value;
+    final today = dayOnly(DateTime.now());
+    final todayTasks = tasks.where((t) {
+      if (t.flag('done')) return false;
+      final a = t.data['assignee'] as String?;
+      if (a != null && a != uid) return false;
+      final d = t.date('due');
+      return d != null && !dayOnly(d).isAfter(today);
+    }).map((t) => t.str('title')).toList();
+    final since = couple?['since'];
+    final together = since is Timestamp
+        ? togetherText(since.toDate())
+        : 'Ukeep';
+    DateTime? best;
+    String next = '';
+    for (final e in events) {
+      final n = nextOccurrence(e, today);
+      if (n != null && (best == null || n.isBefore(best))) {
+        best = n;
+        final days = n.difference(today).inDays;
+        next = days == 0
+            ? '🎉 Oggi: ${e.str('title')}'
+            : '⏳ ${e.str('title')} tra $days ${days == 1 ? 'giorno' : 'giorni'}';
+      }
+    }
+    WidgetSync.update(together: together, today: todayTasks, next: next);
   }
 
   @override
@@ -39,7 +97,11 @@ class _HomeShellState extends ConsumerState<HomeShell>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _syncNotifs();
+    if (state == AppLifecycleState.resumed) {
+      _syncNotifs();
+      _syncWidget();
+      _checkMood();
+    }
   }
 
   void _syncNotifs() {
@@ -50,7 +112,45 @@ class _HomeShellState extends ConsumerState<HomeShell>
     }
   }
 
-  void _go(int i) => setState(() => _index = i);
+  /// Schede visitate, per il tasto indietro.
+  final List<int> _history = [];
+
+  void _go(int i) {
+    if (i == _index) return;
+    setState(() {
+      _history.remove(_index);
+      _history.add(_index);
+      if (_history.length > 10) _history.removeAt(0);
+      _index = i;
+    });
+  }
+
+  Future<void> _back() async {
+    if (_history.isNotEmpty) {
+      setState(() => _index = _history.removeLast());
+      return;
+    }
+    if (_index != 0) {
+      setState(() => _index = 0);
+      return;
+    }
+    final exit = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: UColors.surface,
+        content: const Text('Vuoi uscire da Ukeep?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Resta')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Esci')),
+        ],
+      ),
+    );
+    if (exit == true) SystemNavigator.pop();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -59,8 +159,17 @@ class _HomeShellState extends ConsumerState<HomeShell>
       if (list != null) {
         NotifService.instance
             .sync(list, FirebaseAuth.instance.currentUser?.uid);
+        _syncWidget();
       }
     });
+    ref.listen(membersProvider, (prev, next) {
+      final m = next.value;
+      if (m == null) return;
+      Push.instance.setMembers(m, FirebaseAuth.instance.currentUser?.uid);
+      if (!_moodAsked) _checkMood();
+    });
+    ref.listen(eventsProvider, (prev, next) => _syncWidget());
+    ref.listen(coupleDocProvider, (prev, next) => _syncWidget());
     final pages = <Widget>[
       HomePage(onGoTo: _go),
       const TasksPage(),
@@ -68,14 +177,19 @@ class _HomeShellState extends ConsumerState<HomeShell>
       const CalendarPage(),
       ProfilePage(coupleId: widget.coupleId),
     ];
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _back();
+      },
+      child: Scaffold(
       body: SafeArea(bottom: false, child: IndexedStack(index: _index, children: pages)),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Colors.white.withAlpha(0), Colors.white.withAlpha(215)],
+            colors: [UColors.surface.withAlpha(0), UColors.surface.withAlpha(215)],
           ),
         ),
         child: NavigationBarTheme(
@@ -128,6 +242,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
           ),
         ),
       ),
+    ),
     );
   }
 }

@@ -24,6 +24,17 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Chiave per le notifiche al partner (facoltativa)
+        env:
+          FCM_SA_B64: ${{ secrets.FCM_SA_B64 }}
+        run: |
+          if [ -n "$FCM_SA_B64" ]; then
+            echo "$FCM_SA_B64" | base64 -d > assets/fcm_sa.json
+            echo "Chiave push presente"
+          else
+            echo "Nessuna chiave push: abbracci e avvisi al partner disattivati"
+          fi
+
       - name: Genera progetto Android e dipendenze
         run: bash scripts/bootstrap.sh
 

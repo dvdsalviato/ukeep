@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/secret.dart';
+import '../../core/sub_items.dart';
 import '../../core/theme.dart';
 import '../../core/ui.dart';
+import '../../core/undo.dart';
 import '../../data/providers.dart';
 import '../../data/repo.dart';
 
@@ -14,6 +16,7 @@ class ProjectsSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final repo = ref.watch(repoProvider);
+    if (repo == null) return const SizedBox.shrink();
     final projects = ref.watch(projectsProvider).value ?? [];
     if (projects.isEmpty) {
       const templates = [
@@ -40,12 +43,11 @@ class ProjectsSection extends ConsumerWidget {
               children: [
                 for (final t in templates)
                   templateChip(t[0], t[1], () {
-                    repo?.add('projects', {
+                    repo.add('projects', {
                       'title': t[1],
                       'icon': t[0],
                       'desc': '',
                       'status': 'active',
-                      'steps': [],
                     });
                   }),
               ],
@@ -81,18 +83,29 @@ class ProjectsSection extends ConsumerWidget {
                                   ProjectDetailPage(projectId: p.id)));
                         }
                       },
-                      onDelete: () async {
-                        if (await confirm(context,
-                            'Eliminare il progetto segreto "${p.str('title')}"?')) {
-                          ref.read(repoProvider)?.remove('projects', p.id);
-                        }
-                      },
+                      onDelete: () => deleteItem(context, repo, 'projects', p),
                     )
                   : UCard(
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => ProjectDetailPage(projectId: p.id))),
-                child: Builder(builder: (context) {
-                  final steps = p.steps('steps');
+                onLongPress: () => itemMenu(context,
+                        title: p.str('title'),
+                        onOpen: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    ProjectDetailPage(projectId: p.id))),
+                        onEdit: () =>
+                            showProjectSheet(context, repo, item: p),
+                        onDelete: () =>
+                            deleteItem(context, repo, 'projects', p)),
+                child: SubItemsBuilder(
+                    items: SubItems(repo, 'projects', p.id, 'steps'),
+                    parentItem: p,
+                    legacyField: 'steps',
+                    builder: (context, subs) {
+                  final steps = [
+                    for (final x in subs) {'t': x.str('t'), 'd': x.flag('d')}
+                  ];
                   final done = steps.where((s) => s['d'] == true).length;
                   final isDone = p.str('status') == 'done';
                   final target = p.date('target');
@@ -112,7 +125,7 @@ class ProjectsSection extends ConsumerWidget {
                                         : null)),
                           ),
                           if (isDone)
-                            const Icon(Icons.check_circle,
+                            Icon(Icons.check_circle,
                                 color: UColors.accent),
                         ],
                       ),
@@ -121,7 +134,7 @@ class ProjectsSection extends ConsumerWidget {
                         Text(p.str('desc'),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: UColors.muted)),
+                            style: TextStyle(color: UColors.muted)),
                       ],
                       const SizedBox(height: 12),
                       ClipRRect(
@@ -142,12 +155,12 @@ class ProjectsSection extends ConsumerWidget {
                               steps.isEmpty
                                   ? 'Nessun passo'
                                   : '$done di ${steps.length} passi',
-                              style: const TextStyle(
+                              style: TextStyle(
                                   color: UColors.muted, fontSize: 13.5)),
                           const Spacer(),
                           if (target != null)
                             Text('Entro ${fmtDay(target)}',
-                                style: const TextStyle(
+                                style: TextStyle(
                                     color: UColors.muted, fontSize: 13.5)),
                         ],
                       ),
@@ -221,7 +234,7 @@ class _ProjectFormState extends State<_ProjectForm> {
         ...secretFields(null),
     };
     if (widget.item == null) {
-      widget.repo.add('projects', {...data, 'status': 'active', 'steps': []});
+      widget.repo.add('projects', {...data, 'status': 'active'});
     } else {
       widget.repo.update('projects', widget.item!.id, data);
     }
@@ -311,51 +324,25 @@ class _ProjectFormState extends State<_ProjectForm> {
   }
 }
 
-class ProjectDetailPage extends ConsumerStatefulWidget {
+class ProjectDetailPage extends ConsumerWidget {
   const ProjectDetailPage({super.key, required this.projectId});
   final String projectId;
 
   @override
-  ConsumerState<ProjectDetailPage> createState() => _ProjectDetailPageState();
-}
-
-class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
-  final _input = TextEditingController();
-
-  @override
-  void dispose() {
-    _input.dispose();
-    super.dispose();
-  }
-
-  void _setSteps(Repo repo, List<Map<String, dynamic>> steps) =>
-      repo.update('projects', widget.projectId, {'steps': steps});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final repo = ref.watch(repoProvider);
     final projects = ref.watch(projectsProvider).value ?? [];
+    final members = ref.watch(membersProvider).value ?? [];
     Item? found;
     for (final p in projects) {
-      if (p.id == widget.projectId) found = p;
+      if (p.id == projectId) found = p;
     }
     if (found == null || repo == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     final Item p = found;
-    final steps = p.steps('steps');
     final isDone = p.str('status') == 'done';
     final target = p.date('target');
-
-    void add() {
-      final t = _input.text.trim();
-      if (t.isEmpty) return;
-      _setSteps(repo, [
-        ...steps,
-        {'t': t, 'd': false}
-      ]);
-      _input.clear();
-    }
 
     return Scaffold(
       appBar: AppBar(
@@ -365,10 +352,8 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
               if (v == 'edit') {
                 showProjectSheet(context, repo, item: p);
               } else if (v == 'delete') {
-                if (await confirm(context, 'Eliminare "${p.str('title')}"?')) {
-                  repo.remove('projects', p.id);
-                  if (context.mounted) Navigator.pop(context);
-                }
+                deleteItem(context, repo, 'projects', p);
+                Navigator.pop(context);
               }
             },
             itemBuilder: (_) => const [
@@ -392,99 +377,37 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
                 if (p.str('desc').isNotEmpty) ...[
                   const SizedBox(height: 6),
                   Text(p.str('desc'),
-                      style:
-                          const TextStyle(color: UColors.muted, fontSize: 16)),
+                      style: TextStyle(color: UColors.muted, fontSize: 16)),
                 ],
                 if (target != null) ...[
                   const SizedBox(height: 8),
                   Row(children: [
-                    const Icon(Icons.event, size: 18, color: UColors.muted),
+                    Icon(Icons.event, size: 18, color: UColors.muted),
                     const SizedBox(width: 6),
                     Text('Entro ${fmtDay(target)}',
-                        style: const TextStyle(color: UColors.muted)),
+                        style: TextStyle(color: UColors.muted)),
                   ]),
                 ],
               ],
             ),
           ),
-          UCard(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _input,
-                    textCapitalization: TextCapitalization.sentences,
-                    onSubmitted: (_) => add(),
-                    decoration: const InputDecoration(
-                        hintText: 'Aggiungi un passo…',
-                        border: InputBorder.none),
-                  ),
-                ),
-                IconButton.filled(
-                  style: IconButton.styleFrom(backgroundColor: UColors.dark),
-                  onPressed: add,
-                  icon: const Icon(Icons.add),
-                ),
-              ],
-            ),
+          SubItemsPanel(
+            items: SubItems(repo, 'projects', p.id, 'steps'),
+            parentItem: p,
+            legacyField: 'steps',
+            members: members,
+            round: false,
+            hint: 'Aggiungi un passo…',
+            emptyIcon: Icons.route_outlined,
+            emptyText:
+                'Spezzate il progetto in piccoli passi: li spunterete uno a uno.',
           ),
-          const SizedBox(height: 14),
-          if (steps.isEmpty)
-            const EmptyHint(Icons.route_outlined,
-                'Spezzate il progetto in piccoli passi: li spunterete uno a uno.')
-          else
-            UCard(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              child: Column(
-                children: [
-                  for (var i = 0; i < steps.length; i++)
-                    Dismissible(
-                      key: ValueKey('${p.id}-$i-${steps[i]['t']}'),
-                      direction: DismissDirection.endToStart,
-                      background: Container(
-                        alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.only(right: 12),
-                        child: const Icon(Icons.delete_outline,
-                            color: UColors.danger),
-                      ),
-                      onDismissed: (_) {
-                        final next = [...steps]..removeAt(i);
-                        _setSteps(repo, next);
-                      },
-                      child: CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        activeColor: UColors.accent,
-                        value: steps[i]['d'] == true,
-                        onChanged: (v) {
-                          final next = [...steps];
-                          next[i] = {...next[i], 'd': v == true};
-                          _setSteps(repo, next);
-                        },
-                        title: Text(
-                          '${steps[i]['t']}',
-                          style: TextStyle(
-                            fontSize: 16.5,
-                            decoration: steps[i]['d'] == true
-                                ? TextDecoration.lineThrough
-                                : null,
-                            color: steps[i]['d'] == true
-                                ? UColors.muted
-                                : UColors.ink,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
           const SizedBox(height: 20),
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
               shape: const StadiumBorder(),
               padding: const EdgeInsets.symmetric(vertical: 16),
-              side: const BorderSide(color: UColors.dark),
+              side: BorderSide(color: UColors.dark),
               foregroundColor: UColors.dark,
             ),
             onPressed: () => repo.update(

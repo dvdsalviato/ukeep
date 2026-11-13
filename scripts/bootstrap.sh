@@ -19,6 +19,7 @@ fi
 flutter pub add flutter_localizations --sdk=flutter
 flutter pub add firebase_core firebase_auth cloud_firestore google_sign_in flutter_riverpod intl image_picker image shared_preferences crypto
 flutter pub add flutter_local_notifications:^19.5.0 timezone:^0.10.0
+flutter pub add firebase_messaging googleapis_auth home_widget
 flutter pub add --dev flutter_launcher_icons
 
 python3 scripts/patch_pubspec.py
@@ -36,7 +37,10 @@ cat > android/app/src/main/res/raw/keep.xml <<'XML'
     tools:keep="@drawable/ic_stat" />
 XML
 
-# Permessi, ricevitori notifiche e desugaring
+# Widget Home (Kotlin, layout) e risorse extra
+cp -r scripts/android_extra/. android/app/src/main/
+
+# Permessi, ricevitori notifiche, widget, push e desugaring
 python3 scripts/patch_android.py
 
 # Nome dell'app sotto l'icona

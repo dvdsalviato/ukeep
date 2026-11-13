@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/mood.dart';
 import '../../core/notifications.dart';
 import '../../core/photo.dart';
 import '../../core/theme.dart';
@@ -11,6 +12,10 @@ import '../../core/ui.dart';
 import '../../data/providers.dart';
 import '../../data/repo.dart';
 import '../calendar/calendar_page.dart';
+import '../expenses/expenses_page.dart';
+import '../polls/polls_page.dart';
+import '../search/search_page.dart';
+import '../stories/stories.dart';
 import '../tasks/tasks_page.dart';
 
 class HomePage extends ConsumerWidget {
@@ -53,7 +58,23 @@ class HomePage extends ConsumerWidget {
     final wishes = ref.watch(wishesProvider).value ?? [];
     final lists = ref.watch(listsProvider).value ?? [];
     final projects = ref.watch(projectsProvider).value ?? [];
+    final expenses = ref.watch(expensesProvider).value ?? [];
+    final polls = ref.watch(pollsProvider).value ?? [];
+    final lastHug = ref.watch(lastHugProvider).value;
     final me = FirebaseAuth.instance.currentUser;
+    final partnerItems = members.where((m) => m.id != me?.uid).toList();
+    final partnerName = partnerItems.isEmpty
+        ? 'il partner'
+        : (firstName(partnerItems.first.str('name')).isEmpty
+            ? 'il partner'
+            : firstName(partnerItems.first.str('name')));
+    final toVote =
+        polls.where((p) => pollNeedsMyVote(p, me?.uid)).take(2).toList();
+    final hugAt = lastHug?.date('at');
+    final hugFromPartner = lastHug != null &&
+        lastHug.str('by') != me?.uid &&
+        hugAt != null &&
+        DateTime.now().difference(hugAt).inHours < 24;
 
     // --- persone
     final sorted = [...members]..sort((a, b) {
@@ -100,15 +121,31 @@ class HomePage extends ConsumerWidget {
               Expanded(
                 child: Text(dateLabel,
                     style:
-                        const TextStyle(color: UColors.muted, fontSize: 15)),
+                        TextStyle(color: UColors.muted, fontSize: 15)),
               ),
+              IconButton(
+                tooltip: 'Cerca',
+                onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const SearchPage())),
+                style: IconButton.styleFrom(backgroundColor: UColors.card),
+                icon: Icon(Icons.search, color: UColors.ink),
+              ),
+              const SizedBox(width: 6),
+              IconButton(
+                tooltip: isDark ? 'Tema chiaro' : 'Tema scuro',
+                onPressed: ThemeCtl.toggle,
+                style: IconButton.styleFrom(backgroundColor: UColors.card),
+                icon: Icon(
+                    isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+                    color: UColors.ink),
+              ),
+              const SizedBox(width: 6),
               ValueListenableBuilder<NotifSettings>(
                 valueListenable: NotifService.instance.settings,
                 builder: (context, s, _) => IconButton(
                   tooltip: 'Notifiche',
                   onPressed: () => showNotifSheet(context),
-                  style: IconButton.styleFrom(
-                      backgroundColor: Colors.white.withAlpha(190)),
+                  style: IconButton.styleFrom(backgroundColor: UColors.card),
                   icon: Icon(
                       s.enabled
                           ? Icons.notifications_none
@@ -131,11 +168,49 @@ class HomePage extends ConsumerWidget {
                   onTap: sorted[i].id == me?.uid
                       ? () => changeProfilePhoto(context)
                       : null,
-                  child: Container(
-                    padding: const EdgeInsets.all(3),
-                    decoration: const BoxDecoration(
-                        color: Colors.white, shape: BoxShape.circle),
-                    child: UAvatar.member(sorted[i], size: 76),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                            color: UColors.surface, shape: BoxShape.circle),
+                        child: UAvatar.member(sorted[i], size: 76),
+                      ),
+                      Positioned(
+                        right: i == 0 ? null : -4,
+                        left: i == 0 ? -4 : null,
+                        bottom: -4,
+                        child: GestureDetector(
+                          onTap: sorted[i].id == me?.uid
+                              ? () => showMoodPicker(context, me!.uid)
+                              : null,
+                          child: Builder(builder: (_) {
+                            final mood = todayMood(sorted[i]);
+                            if (mood == null && sorted[i].id != me?.uid) {
+                              return const SizedBox.shrink();
+                            }
+                            return Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                  color: UColors.surface,
+                                  shape: BoxShape.circle,
+                                  boxShadow: const [
+                                    BoxShadow(
+                                        color: Color(0x22000000),
+                                        blurRadius: 6)
+                                  ]),
+                              child: Text(mood ?? '🙂',
+                                  style: TextStyle(
+                                      fontSize: 20,
+                                      color: mood == null
+                                          ? UColors.muted.withAlpha(120)
+                                          : null)),
+                            );
+                          }),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -144,8 +219,8 @@ class HomePage extends ConsumerWidget {
                 offset: const Offset(-8, 0),
                 child: Container(
                   padding: const EdgeInsets.all(3),
-                  decoration: const BoxDecoration(
-                      color: Colors.white, shape: BoxShape.circle),
+                  decoration: BoxDecoration(
+                      color: UColors.surface, shape: BoxShape.circle),
                   child: CircleAvatar(
                     radius: 38,
                     backgroundColor: UColors.bgMid,
@@ -181,12 +256,40 @@ class HomePage extends ConsumerWidget {
                 since != null
                     ? '${togetherText(since)}  ›'
                     : 'Imposta da quando state insieme  ›',
-                style: const TextStyle(color: UColors.muted, fontSize: 16),
+                style: TextStyle(color: UColors.muted, fontSize: 16),
               ),
             ),
           ),
         ),
-        const SizedBox(height: 20),
+        if (repo != null && partnerItems.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Center(
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: UColors.card,
+                foregroundColor: UColors.ink,
+                shape: const StadiumBorder(),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              ),
+              onPressed: () => sendHug(context, repo),
+              icon: const Text('🤗', style: TextStyle(fontSize: 18)),
+              label: Text('Manda un abbraccio a $partnerName'),
+            ),
+          ),
+          if (hugFromPartner)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Center(
+                child: Text(
+                    '$partnerName ti ha mandato un abbraccio alle ${DateFormat('HH:mm').format(hugAt!)} 💛',
+                    style: TextStyle(color: UColors.accent, fontSize: 14)),
+              ),
+            ),
+        ],
+        const SizedBox(height: 16),
+        const StoriesRow(),
+        const SizedBox(height: 14),
         // ultimi 7 giorni
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -206,12 +309,12 @@ class HomePage extends ConsumerWidget {
         const SizedBox(height: 10),
         Center(
           child: Text.rich(TextSpan(
-            style: const TextStyle(color: UColors.muted, fontSize: 16),
+            style: TextStyle(color: UColors.muted, fontSize: 16),
             children: [
               const TextSpan(text: 'Serie di '),
               TextSpan(
                   text: '$streak',
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontWeight: FontWeight.w800, color: UColors.ink)),
               TextSpan(
                   text: doneToday
@@ -259,7 +362,7 @@ class HomePage extends ConsumerWidget {
                   onTap: () => onGoTo(1),
                   child: Row(
                     children: [
-                      const Icon(Icons.check_circle_outline,
+                      Icon(Icons.check_circle_outline,
                           color: UColors.ink),
                       const SizedBox(width: 10),
                       const Text('Attività da fare',
@@ -267,15 +370,15 @@ class HomePage extends ConsumerWidget {
                               fontSize: 18, fontWeight: FontWeight.w700)),
                       const SizedBox(width: 8),
                       Text('${open.length} da fare',
-                          style: const TextStyle(color: UColors.muted)),
+                          style: TextStyle(color: UColors.muted)),
                       const Spacer(),
-                      const Icon(Icons.chevron_right, color: UColors.muted),
+                      Icon(Icons.chevron_right, color: UColors.muted),
                     ],
                   ),
                 ),
                 const SizedBox(height: 6),
                 if (open.isEmpty)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.symmetric(vertical: 14),
                     child: Text('Niente in sospeso. Godetevi la giornata!',
                         style: TextStyle(color: UColors.muted)),
@@ -293,12 +396,46 @@ class HomePage extends ConsumerWidget {
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
                     child: Text('e ${open.length - 3} in più',
-                        style: const TextStyle(color: UColors.muted)),
+                        style: TextStyle(color: UColors.muted)),
                   ),
               ],
             ),
           ),
         ),
+        if (repo != null)
+          for (final p in toVote) ...[
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: PollCard(poll: p, repo: repo, members: members),
+            ),
+          ],
+        if (expenses.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: UCard(
+              onTap: () {
+                listsSegment.value = 3;
+                onGoTo(2);
+              },
+              child: Row(
+                children: [
+                  const Text('💸', style: TextStyle(fontSize: 24)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                        balanceText(
+                            expenseBalance(expenses, me?.uid), partnerName),
+                        style: const TextStyle(
+                            fontSize: 17, fontWeight: FontWeight.w700)),
+                  ),
+                  Icon(Icons.chevron_right, color: UColors.muted),
+                ],
+              ),
+            ),
+          ),
+        ],
         if (upcoming.isNotEmpty) ...[
           const SizedBox(height: 12),
           Padding(
@@ -308,7 +445,7 @@ class HomePage extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(children: const [
+                  Row(children: [
                     Icon(Icons.cake_outlined, color: UColors.ink),
                     SizedBox(width: 10),
                     Text('Prossime date',
@@ -329,7 +466,7 @@ class HomePage extends ConsumerWidget {
                                 style: const TextStyle(fontSize: 16)),
                           ),
                           Text(relDay(u.key, far: true),
-                              style: const TextStyle(
+                              style: TextStyle(
                                   color: UColors.danger,
                                   fontWeight: FontWeight.w600,
                                   fontSize: 13.5)),
@@ -384,6 +521,28 @@ class HomePage extends ConsumerWidget {
                   onGoTo(2);
                 },
               ),
+              _Promo(
+                title: 'Spese',
+                subtitle: expenses.isEmpty
+                    ? 'Chi ha pagato cosa, e chi deve a chi'
+                    : balanceText(expenseBalance(expenses, me?.uid), partnerName),
+                icon: Icons.euro,
+                colors: const [Color(0xFFDCD0F5), Color(0xFFFFE6C9)],
+                onTap: () {
+                  listsSegment.value = 3;
+                  onGoTo(2);
+                },
+              ),
+              _Promo(
+                title: 'Sondaggi',
+                subtitle: 'Sushi o pizza? Votate e decidete insieme',
+                icon: Icons.how_to_vote_outlined,
+                colors: const [Color(0xFFFFD9CC), Color(0xFFDCD0F5)],
+                onTap: () {
+                  listsSegment.value = 4;
+                  onGoTo(2);
+                },
+              ),
             ],
           ),
         ),
@@ -413,7 +572,7 @@ class _Stat extends StatelessWidget {
               const SizedBox(height: 2),
               Text('$label ›',
                   style:
-                      const TextStyle(color: UColors.muted, fontSize: 14)),
+                      TextStyle(color: UColors.muted, fontSize: 14)),
             ],
           ),
         ),
@@ -457,6 +616,8 @@ class _DayDot extends StatelessWidget {
   }
 }
 
+const _pInk = Color(0xFF2A2430);
+
 class _Promo extends StatelessWidget {
   const _Promo({
     required this.title,
@@ -497,22 +658,22 @@ class _Promo extends StatelessWidget {
                             fontSize: 11,
                             letterSpacing: 1.6,
                             fontWeight: FontWeight.w700,
-                            color: UColors.ink.withAlpha(150))),
+                            color: _pInk.withAlpha(150))),
                     const Spacer(),
                     CircleAvatar(
                         radius: 18,
                         backgroundColor: Colors.white.withAlpha(200),
-                        child: Icon(icon, size: 20, color: UColors.ink)),
+                        child: Icon(icon, size: 20, color: _pInk)),
                   ],
                 ),
                 const Spacer(),
-                Text(title, style: serif(28)),
+                Text(title, style: serif(28, color: _pInk)),
                 const SizedBox(height: 4),
                 Text(subtitle,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        color: UColors.ink.withAlpha(170), fontSize: 14)),
+                        color: _pInk.withAlpha(170), fontSize: 14)),
               ],
             ),
           ),

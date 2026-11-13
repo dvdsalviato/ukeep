@@ -56,6 +56,18 @@ class CoupleService {
     await batch.commit();
   }
 
+  /// Esce dalla coppia: i dati condivisi restano al partner.
+  Future<void> leaveCouple(String uid, String coupleId) async {
+    final batch = _db.batch();
+    batch.update(_db.collection('couples').doc(coupleId), {
+      'members': FieldValue.arrayRemove([uid]),
+    });
+    batch.update(_db.collection('users').doc(uid), {
+      'coupleId': FieldValue.delete(),
+    });
+    await batch.commit();
+  }
+
   String _randomCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     final r = Random.secure();

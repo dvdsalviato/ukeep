@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../core/secret.dart';
 import '../../core/theme.dart';
 import '../../core/ui.dart';
+import '../../core/undo.dart';
 import '../../data/providers.dart';
 import '../../data/repo.dart';
 
@@ -147,7 +148,7 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
                         Expanded(
                           child: Center(
                             child: Text(d,
-                                style: const TextStyle(
+                                style: TextStyle(
                                     color: UColors.muted,
                                     fontWeight: FontWeight.w600,
                                     fontSize: 13)),
@@ -183,7 +184,7 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: UCard(
               child: dayEmpty
-                  ? const Text('Niente in programma per questo giorno.',
+                  ? Text('Niente in programma per questo giorno.',
                       style: TextStyle(color: UColors.muted))
                   : Column(
                       children: [
@@ -196,6 +197,15 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
                             onTap: repo == null
                                 ? null
                                 : () => showEventSheet(context, repo, item: e),
+                            onLongPress: repo == null
+                                ? null
+                                : () => itemMenu(context,
+                                    title: e.str('title'),
+                                    onEdit: () => showEventSheet(
+                                        context, repo,
+                                        item: e),
+                                    onDelete: () =>
+                                        deleteItem(context, repo, 'events', e)),
                           ),
                         for (final t in dayTasks)
                           _AgendaRow(
@@ -231,7 +241,7 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
                               fontSize: 18, fontWeight: FontWeight.w700)),
                       const SizedBox(width: 8),
                       Text('${specials.length}',
-                          style: const TextStyle(color: UColors.muted)),
+                          style: TextStyle(color: UColors.muted)),
                     ],
                   ),
                   const SizedBox(height: 6),
@@ -240,6 +250,14 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
                       onTap: repo == null
                           ? null
                           : () => showEventSheet(context, repo, item: s.value),
+                      onLongPress: repo == null
+                          ? null
+                          : () => itemMenu(context,
+                              title: s.value.str('title'),
+                              onEdit: () =>
+                                  showEventSheet(context, repo, item: s.value),
+                              onDelete: () =>
+                                  deleteItem(context, repo, 'events', s.value)),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         child: Row(
@@ -254,13 +272,13 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
                                   Text(s.value.str('title'),
                                       style: const TextStyle(fontSize: 16.5)),
                                   Text(fmtDay(s.key),
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                           color: UColors.muted)),
                                 ],
                               ),
                             ),
                             Text(relDay(s.key, far: true),
-                                style: const TextStyle(
+                                style: TextStyle(
                                     color: UColors.danger,
                                     fontWeight: FontWeight.w700,
                                     fontSize: 13.5)),
@@ -288,7 +306,7 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: UCard(
               child: plans.isEmpty
-                  ? const Text('Ancora nessun evento in programma.',
+                  ? Text('Ancora nessun evento in programma.',
                       style: TextStyle(color: UColors.muted))
                   : Column(
                       children: [
@@ -307,6 +325,15 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
                                 ? null
                                 : () => showEventSheet(context, repo,
                                     item: p.value),
+                            onLongPress: repo == null
+                                ? null
+                                : () => itemMenu(context,
+                                    title: p.value.str('title'),
+                                    onEdit: () => showEventSheet(
+                                        context, repo,
+                                        item: p.value),
+                                    onDelete: () =>
+                                        deleteItem(context, repo, 'events', p.value)),
                           ),
                       ],
                     ),
@@ -359,7 +386,7 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
                       fontWeight: isSel || isToday
                           ? FontWeight.w700
                           : FontWeight.w400,
-                      color: isSel ? Colors.white : UColors.ink)),
+                      color: isSel ? UColors.onDark : UColors.ink)),
             ),
             SizedBox(
               height: 8,
@@ -395,6 +422,7 @@ class _AgendaRow extends StatelessWidget {
     this.sub,
     this.trailing,
     this.onTap,
+    this.onLongPress,
   });
   final IconData icon;
   final Color color;
@@ -402,10 +430,12 @@ class _AgendaRow extends StatelessWidget {
   final String? sub;
   final String? trailing;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) => InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Row(
@@ -419,7 +449,7 @@ class _AgendaRow extends StatelessWidget {
                     Text(title, style: const TextStyle(fontSize: 16.5)),
                     if (sub != null && sub!.isNotEmpty)
                       Text(sub!,
-                          style: const TextStyle(color: UColors.muted)),
+                          style: TextStyle(color: UColors.muted)),
                   ],
                 ),
               ),
@@ -580,10 +610,10 @@ class _EventFormState extends State<_EventForm> {
             if (widget.item != null)
               IconButton(
                 onPressed: () {
-                  widget.repo.remove('events', widget.item!.id);
+                  deleteItem(context, widget.repo, 'events', widget.item!);
                   Navigator.pop(context);
                 },
-                icon: const Icon(Icons.delete_outline, color: UColors.danger),
+                icon: Icon(Icons.delete_outline, color: UColors.danger),
               ),
             Expanded(
               child: FilledButton(

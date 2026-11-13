@@ -42,8 +42,8 @@ Future<void> changeProfilePhoto(BuildContext context) async {
           ),
           ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.delete_outline, color: UColors.danger),
-            title: const Text('Rimuovi foto',
+            leading: Icon(Icons.delete_outline, color: UColors.danger),
+            title: Text('Rimuovi foto',
                 style: TextStyle(color: UColors.danger)),
             onTap: () => Navigator.pop(ctx, 'remove'),
           ),
@@ -163,7 +163,7 @@ class _PhotoCropPageState extends State<PhotoCropPage> {
                 padding: EdgeInsets.fromLTRB(24, 8, 24, 24 + bottomInset(context)),
                 child: Column(
                   children: [
-                    const Text(
+                    Text(
                       'Trascina e pizzica per ingrandire.\nIl cerchio è la parte che si vedrà.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: UColors.muted, fontSize: 15),
@@ -214,7 +214,7 @@ class _PhotoCropPageState extends State<PhotoCropPage> {
                               shape: const StadiumBorder(),
                               padding:
                                   const EdgeInsets.symmetric(vertical: 16),
-                              side: const BorderSide(color: UColors.dark),
+                              side: BorderSide(color: UColors.dark),
                               foregroundColor: UColors.dark,
                             ),
                             onPressed: _saving

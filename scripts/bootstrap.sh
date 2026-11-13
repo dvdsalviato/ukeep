@@ -17,12 +17,27 @@ if [ ! -d android ]; then
 fi
 
 flutter pub add flutter_localizations --sdk=flutter
-flutter pub add firebase_core firebase_auth cloud_firestore google_sign_in flutter_riverpod intl image_picker
+flutter pub add firebase_core firebase_auth cloud_firestore google_sign_in flutter_riverpod intl image_picker image timezone shared_preferences crypto
+flutter pub add flutter_local_notifications:^19.5.0
 flutter pub add --dev flutter_launcher_icons
 
 python3 scripts/patch_pubspec.py
 flutter pub get
 dart run flutter_launcher_icons
+
+# Icona piccola (monocromatica) per le notifiche
+mkdir -p android/app/src/main/res/drawable
+cp assets/ic_stat.png android/app/src/main/res/drawable/ic_stat.png
+# evita che la riduzione risorse elimini l'icona (usata solo per nome)
+mkdir -p android/app/src/main/res/raw
+cat > android/app/src/main/res/raw/keep.xml <<'XML'
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_stat" />
+XML
+
+# Permessi, ricevitori notifiche e desugaring
+python3 scripts/patch_android.py
 
 # Nome dell'app sotto l'icona
 sed -i 's/android:label="[^"]*"/android:label="Ukeep"/' android/app/src/main/AndroidManifest.xml

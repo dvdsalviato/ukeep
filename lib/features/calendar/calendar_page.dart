@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/secret.dart';
 import '../../core/theme.dart';
 import '../../core/ui.dart';
 import '../../data/providers.dart';
@@ -62,7 +63,10 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
     final projects = ref
             .watch(projectsProvider)
             .value
-            ?.where((p) => p.str('status') != 'done' && p.date('target') != null)
+            ?.where((p) =>
+                p.str('status') != 'done' &&
+                p.date('target') != null &&
+                (!isLocked(p) || isMine(p)))
             .toList() ??
         [];
     final today = dayOnly(DateTime.now());

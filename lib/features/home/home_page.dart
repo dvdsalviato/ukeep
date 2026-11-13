@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/notifications.dart';
 import '../../core/photo.dart';
 import '../../core/theme.dart';
 import '../../core/ui.dart';
@@ -93,9 +94,30 @@ class HomePage extends ConsumerWidget {
       padding: const EdgeInsets.only(bottom: 28),
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-          child: Text(dateLabel,
-              style: const TextStyle(color: UColors.muted, fontSize: 15)),
+          padding: const EdgeInsets.fromLTRB(24, 8, 12, 0),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(dateLabel,
+                    style:
+                        const TextStyle(color: UColors.muted, fontSize: 15)),
+              ),
+              ValueListenableBuilder<NotifSettings>(
+                valueListenable: NotifService.instance.settings,
+                builder: (context, s, _) => IconButton(
+                  tooltip: 'Notifiche',
+                  onPressed: () => showNotifSheet(context),
+                  style: IconButton.styleFrom(
+                      backgroundColor: Colors.white.withAlpha(190)),
+                  icon: Icon(
+                      s.enabled
+                          ? Icons.notifications_none
+                          : Icons.notifications_off_outlined,
+                      color: UColors.ink),
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 18),
         // avatar con cuore

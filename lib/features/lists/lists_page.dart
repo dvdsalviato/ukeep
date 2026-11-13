@@ -1,6 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/secret.dart';
 import '../../core/theme.dart';
 import '../../core/ui.dart';
 import '../../data/providers.dart';
@@ -41,26 +43,7 @@ class ListsHub extends ConsumerWidget {
                   title: 'Liste', subtitle: 'Tutto quello che condividete'),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: SegmentedButton<int>(
-                    showSelectedIcon: false,
-                    style: SegmentedButton.styleFrom(
-                      backgroundColor: Colors.white.withAlpha(190),
-                      selectedBackgroundColor: UColors.dark,
-                      selectedForegroundColor: Colors.white,
-                      foregroundColor: UColors.ink,
-                      side: BorderSide.none,
-                    ),
-                    segments: const [
-                      ButtonSegment(value: 0, label: Text('Liste')),
-                      ButtonSegment(value: 1, label: Text('Desideri')),
-                      ButtonSegment(value: 2, label: Text('Progetti')),
-                    ],
-                    selected: {seg},
-                    onSelectionChanged: (s) => listsSegment.value = s.first,
-                  ),
-                ),
+                child: _Seg(value: seg, onChanged: (v) => listsSegment.value = v),
               ),
               const SizedBox(height: 12),
               if (seg == 0) const ListsSection(),
@@ -74,6 +57,48 @@ class ListsHub extends ConsumerWidget {
   }
 }
 
+class _Seg extends StatelessWidget {
+  const _Seg({required this.value, required this.onChanged});
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    const labels = ['Liste', 'Desideri', 'Progetti'];
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha(190),
+        borderRadius: BorderRadius.circular(30),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < labels.length; i++)
+            Expanded(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => onChanged(i),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.symmetric(vertical: 11),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: value == i ? UColors.dark : Colors.transparent,
+                    borderRadius: BorderRadius.circular(26),
+                  ),
+                  child: Text(labels[i],
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: value == i ? Colors.white : UColors.ink)),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 List<Map<String, dynamic>> _items(Item l) => l.steps('items');
 
 class ListsSection extends ConsumerWidget {
@@ -81,54 +106,171 @@ class ListsSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final repo = ref.watch(repoProvider);
     final lists = [...(ref.watch(listsProvider).value ?? <Item>[])]..sort(
         (a, b) => (a.date('createdAt') ?? DateTime(2100))
             .compareTo(b.date('createdAt') ?? DateTime(2100)));
-    if (lists.isEmpty) {
-      return const EmptyHint(Icons.list_alt,
-          'Nessuna lista ancora. Create la spesa, i film da vedere, le idee per il viaggio…');
-    }
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        children: [
-          for (final l in lists)
+
+    const templates = [
+      ['🛒', 'Spesa'],
+      ['🎬', 'Film da vedere'],
+      ['✈️', 'Idee viaggio'],
+      ['🍽️', 'Ristoranti da provare'],
+      ['🎁', 'Idee regalo'],
+      ['🏠', 'Cose per casa'],
+    ];
+    final existing = lists.map((l) => l.str('name')).toSet();
+    final missing =
+        templates.where((t) => !existing.contains(t[1])).toList();
+
+    Widget templateBlock(String title) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SectionTitle(title),
             Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: UCard(
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => ListDetailPage(listId: l.id))),
-                child: Builder(builder: (context) {
-                  final items = _items(l);
-                  final done = items.where((i) => i['d'] == true).length;
-                  return Row(
-                    children: [
-                      Text(l.str('icon', '📝'),
-                          style: const TextStyle(fontSize: 30)),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(l.str('name'), style: serif(22)),
-                            const SizedBox(height: 4),
-                            Text(
-                                items.isEmpty
-                                    ? 'Vuota'
-                                    : '$done di ${items.length} fatti',
-                                style:
-                                    const TextStyle(color: UColors.muted)),
-                          ],
-                        ),
-                      ),
-                      const Icon(Icons.chevron_right, color: UColors.muted),
-                    ],
-                  );
-                }),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  for (final t in missing)
+                    templateChip(t[0], t[1], () {
+                      repo?.add('lists',
+                          {'name': t[1], 'icon': t[0], 'items': []});
+                    }),
+                ],
               ),
             ),
+          ],
+        );
+
+    if (lists.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const EmptyCard(
+            emoji: '📝',
+            title: 'La vostra prima lista',
+            text:
+                'Spesa, film da vedere, idee per il viaggio: una lista che vedete e spuntate in due.',
+          ),
+          templateBlock('Parti da un modello'),
         ],
-      ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            children: [
+              for (final l in lists)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: isLocked(l)
+                      ? LockedCard(
+                          item: l,
+                          titleKey: 'name',
+                          what: 'Lista',
+                          onOpen: () async {
+                            if (await unlockItem(
+                                context, l, l.str('name'))) {
+                              if (!context.mounted) return;
+                              Navigator.of(context).push(MaterialPageRoute(
+                                  builder: (_) =>
+                                      ListDetailPage(listId: l.id)));
+                            }
+                          },
+                          onDelete: () async {
+                            if (await confirm(context,
+                                'Eliminare la lista segreta "${l.str('name')}"?')) {
+                              ref.read(repoProvider).remove('lists', l.id);
+                            }
+                          },
+                        )
+                      : UCard(
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => ListDetailPage(listId: l.id))),
+                    child: Builder(builder: (context) {
+                      final items = _items(l);
+                      final done = items.where((i) => i['d'] == true).length;
+                      final open =
+                          items.where((i) => i['d'] != true).take(2).toList();
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 52,
+                                height: 52,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(18),
+                                  gradient: const LinearGradient(
+                                      colors: [
+                                        UColors.bgTop,
+                                        UColors.bgBottom
+                                      ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight),
+                                ),
+                                child: Text(l.str('icon', '📝'),
+                                    style: const TextStyle(fontSize: 26)),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(l.str('name'), style: serif(22)),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                        items.isEmpty
+                                            ? 'Vuota: tocca per aggiungere'
+                                            : '$done di ${items.length} fatti',
+                                        style: const TextStyle(
+                                            color: UColors.muted,
+                                            fontSize: 13.5)),
+                                  ],
+                                ),
+                              ),
+                              const Icon(Icons.chevron_right,
+                                  color: UColors.muted),
+                            ],
+                          ),
+                          if (items.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: LinearProgressIndicator(
+                                value: done / items.length,
+                                minHeight: 6,
+                                backgroundColor: UColors.bgMid,
+                                color: UColors.accent,
+                              ),
+                            ),
+                          ],
+                          for (final i in open)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text('•  ${i['t']}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 15)),
+                            ),
+                        ],
+                      );
+                    }),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (missing.isNotEmpty) templateBlock('Altre idee'),
+      ],
     );
   }
 }
@@ -149,6 +291,8 @@ class _ListFormState extends State<_ListForm> {
   late final TextEditingController _name =
       TextEditingController(text: widget.item?.str('name'));
   late String _icon = widget.item?.str('icon', '🛒') ?? '🛒';
+  late bool _secret = widget.item?.flag('locked') ?? false;
+  String? _newPin;
 
   @override
   void dispose() {
@@ -159,10 +303,17 @@ class _ListFormState extends State<_ListForm> {
   void _save() {
     final name = _name.text.trim();
     if (name.isEmpty) return;
+    final wasSecret = widget.item?.flag('locked') ?? false;
+    final sec = <String, dynamic>{
+      if (_secret && _newPin != null) ...secretFields(_newPin),
+      if (!_secret && wasSecret) ...secretFields(null),
+    };
     if (widget.item == null) {
-      widget.repo.add('lists', {'name': name, 'icon': _icon, 'items': []});
+      widget.repo.add('lists',
+          {'name': name, 'icon': _icon, 'items': [], ...sec});
     } else {
-      widget.repo.update('lists', widget.item!.id, {'name': name, 'icon': _icon});
+      widget.repo.update(
+          'lists', widget.item!.id, {'name': name, 'icon': _icon, ...sec});
     }
     Navigator.pop(context);
   }
@@ -208,6 +359,15 @@ class _ListFormState extends State<_ListForm> {
                 ),
               ),
           ],
+        ),
+        const SizedBox(height: 14),
+        SecretSwitch(
+          value: _secret,
+          what: 'Lista',
+          onChanged: (on, pin) => setState(() {
+            _secret = on;
+            _newPin = pin;
+          }),
         ),
         const SizedBox(height: 20),
         FilledButton(

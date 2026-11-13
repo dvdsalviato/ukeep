@@ -27,6 +27,21 @@ void toggleTask(Repo repo, Item t) {
   });
 }
 
+/// Scaduta: con orario dopo quell'ora, senza orario dal giorno dopo.
+bool taskOverdue(Item t) {
+  final d = t.date('due');
+  if (d == null || t.flag('done')) return false;
+  final base = dayOnly(d);
+  final time = t.str('time');
+  if (time.contains(':')) {
+    final p = time.split(':');
+    final at = DateTime(base.year, base.month, base.day,
+        int.tryParse(p[0]) ?? 0, int.tryParse(p[1]) ?? 0);
+    return at.isBefore(DateTime.now());
+  }
+  return base.isBefore(dayOnly(DateTime.now()));
+}
+
 int compareOpen(Item a, Item b) {
   final da = a.date('due');
   final db = b.date('due');
@@ -58,9 +73,7 @@ class TaskRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final done = task.flag('done');
     final due = task.date('due');
-    final overdue = !done &&
-        due != null &&
-        dayOnly(due).isBefore(dayOnly(DateTime.now()));
+    final overdue = taskOverdue(task);
     final assignee = task.data['assignee'] as String?;
     final who = memberById(members, assignee);
     final meUid = FirebaseAuth.instance.currentUser?.uid;
@@ -72,8 +85,13 @@ class TaskRow extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
-      child: Padding(
-        padding: EdgeInsets.symmetric(vertical: compact ? 8 : 10),
+      child: Container(
+        decoration: BoxDecoration(
+          color: overdue ? UColors.danger.withAlpha(22) : null,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        padding: EdgeInsets.symmetric(
+            vertical: compact ? 8 : 10, horizontal: overdue ? 8 : 0),
         child: Row(
           children: [
             GestureDetector(
@@ -139,7 +157,9 @@ class TaskRow extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(left: 10),
                 child: Text(
-                  relDay(due),
+                  task.str('time').isEmpty
+                      ? relDay(due)
+                      : '${relDay(due)} ${task.str('time')}',
                   style: TextStyle(
                     fontSize: 13.5,
                     fontWeight: FontWeight.w600,
@@ -314,12 +334,14 @@ class _TaskFormState extends State<_TaskForm> {
   late final TextEditingController _note =
       TextEditingController(text: widget.item?.str('note'));
   DateTime? _due;
+  String _time = '';
   String? _assignee;
 
   @override
   void initState() {
     super.initState();
     _due = widget.item?.date('due');
+    _time = widget.item?.str('time') ?? '';
     _assignee = widget.item?.data['assignee'] as String?;
   }
 
@@ -341,6 +363,23 @@ class _TaskFormState extends State<_TaskForm> {
     if (d != null) setState(() => _due = d);
   }
 
+  Future<void> _pickTime() async {
+    var initial = const TimeOfDay(hour: 18, minute: 0);
+    if (_time.contains(':')) {
+      final p = _time.split(':');
+      initial = TimeOfDay(
+          hour: int.tryParse(p[0]) ?? 18, minute: int.tryParse(p[1]) ?? 0);
+    }
+    final t = await showTimePicker(context: context, initialTime: initial);
+    if (t != null) {
+      setState(() {
+        _time =
+            '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+        _due ??= dayOnly(DateTime.now());
+      });
+    }
+  }
+
   void _save() {
     final title = _title.text.trim();
     if (title.isEmpty) return;
@@ -348,6 +387,7 @@ class _TaskFormState extends State<_TaskForm> {
       'title': title,
       'note': _note.text.trim(),
       'due': _due == null ? null : Timestamp.fromDate(_due!),
+      'time': _due == null ? '' : _time,
       'assignee': _assignee,
     };
     if (widget.item == null) {
@@ -404,10 +444,23 @@ class _TaskFormState extends State<_TaskForm> {
               label: Text(_due == null ? 'Scegli data' : fmtDay(_due!)),
               onPressed: _pickDate,
             ),
+            ActionChip(
+              avatar: const Icon(Icons.schedule, size: 18),
+              label: Text(_time.isEmpty ? 'Aggiungi ora' : _time),
+              onPressed: _pickTime,
+            ),
+            if (_time.isNotEmpty)
+              ActionChip(
+                label: const Text('Senza ora'),
+                onPressed: () => setState(() => _time = ''),
+              ),
             if (_due != null)
               ActionChip(
                 label: const Text('Senza scadenza'),
-                onPressed: () => setState(() => _due = null),
+                onPressed: () => setState(() {
+                  _due = null;
+                  _time = '';
+                }),
               ),
           ],
         ),

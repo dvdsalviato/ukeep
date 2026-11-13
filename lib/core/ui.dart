@@ -34,6 +34,7 @@ class UCard extends StatelessWidget {
     required this.child,
     this.padding = const EdgeInsets.all(18),
     this.onTap,
+    this.onLongPress,
     this.color,
     this.margin = EdgeInsets.zero,
   });
@@ -41,6 +42,7 @@ class UCard extends StatelessWidget {
   final EdgeInsets padding;
   final EdgeInsets margin;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final Color? color;
 
   @override
@@ -54,6 +56,7 @@ class UCard extends StatelessWidget {
         child: InkWell(
           borderRadius: radius,
           onTap: onTap,
+          onLongPress: onLongPress,
           child: Padding(padding: padding, child: child),
         ),
       ),
@@ -322,3 +325,61 @@ String togetherText(DateTime since, {DateTime? now}) {
   if (parts.length == 2) return 'Insieme da ${parts[0]} e ${parts[1]}';
   return 'Insieme da ${parts[0]}, ${parts[1]} e ${parts[2]}';
 }
+
+/// Schermata vuota con un po' di carattere.
+class EmptyCard extends StatelessWidget {
+  const EmptyCard(
+      {super.key,
+      required this.emoji,
+      required this.title,
+      required this.text});
+  final String emoji;
+  final String title;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: UCard(
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 26),
+          child: SizedBox(
+            width: double.infinity,
+            child: Column(
+              children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  alignment: Alignment.center,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                        colors: [UColors.bgTop, UColors.bgBottom],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight),
+                  ),
+                  child: Text(emoji, style: const TextStyle(fontSize: 34)),
+                ),
+                const SizedBox(height: 16),
+                Text(title, textAlign: TextAlign.center, style: serif(26)),
+                const SizedBox(height: 8),
+                Text(text,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: UColors.muted, fontSize: 15)),
+              ],
+            ),
+          ),
+        ),
+      );
+}
+
+/// Pillola di scelta rapida (modelli di liste e progetti).
+Widget templateChip(String emoji, String label, VoidCallback onTap) =>
+    ActionChip(
+      avatar: Text(emoji, style: const TextStyle(fontSize: 18)),
+      label: Text(label),
+      onPressed: onTap,
+      backgroundColor: Colors.white.withAlpha(220),
+      side: BorderSide.none,
+      shape: const StadiumBorder(),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+    );

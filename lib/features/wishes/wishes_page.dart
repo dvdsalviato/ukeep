@@ -72,10 +72,13 @@ class _WishesSectionState extends ConsumerState<WishesSection> {
           ),
         ),
         if (shown.isEmpty)
-          EmptyHint(Icons.star_border,
-              viewingPartner
-                  ? '$partnerName non ha ancora aggiunto desideri.'
-                  : 'Nessun desiderio ancora. Aggiungi il primo con il tasto in basso.')
+          EmptyCard(
+            emoji: '🎁',
+            title: viewingPartner ? 'Ancora niente' : 'Cosa vorresti?',
+            text: viewingPartner
+                ? '$partnerName non ha ancora aggiunto desideri.'
+                : 'Aggiungi quello che ti piacerebbe ricevere: il partner lo vedrà e i regali faranno centro.',
+          )
         else
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),

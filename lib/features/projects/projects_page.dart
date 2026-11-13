@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/secret.dart';
 import '../../core/theme.dart';
 import '../../core/ui.dart';
 import '../../data/providers.dart';
@@ -12,10 +13,46 @@ class ProjectsSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final repo = ref.watch(repoProvider);
     final projects = ref.watch(projectsProvider).value ?? [];
     if (projects.isEmpty) {
-      return const EmptyHint(Icons.flag_outlined,
-          'Nessun progetto. Una vacanza, un trasloco, una ristrutturazione: partite da qui.');
+      const templates = [
+        ['✈️', 'Vacanza'],
+        ['🏠', 'Casa'],
+        ['🎉', 'Festa a sorpresa'],
+        ['💍', 'Grande giorno'],
+      ];
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const EmptyCard(
+            emoji: '🎯',
+            title: 'Il primo progetto',
+            text:
+                'Una vacanza, un trasloco, una festa: spezzatelo in piccoli passi e spuntateli insieme.',
+          ),
+          const SectionTitle('Parti da un modello'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                for (final t in templates)
+                  templateChip(t[0], t[1], () {
+                    repo?.add('projects', {
+                      'title': t[1],
+                      'icon': t[0],
+                      'desc': '',
+                      'status': 'active',
+                      'steps': [],
+                    });
+                  }),
+              ],
+            ),
+          ),
+        ],
+      );
     }
     final sorted = [...projects]..sort((a, b) {
         final ad = a.str('status') == 'done' ? 1 : 0;
@@ -31,7 +68,27 @@ class ProjectsSection extends ConsumerWidget {
           for (final p in sorted)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: UCard(
+              child: isLocked(p)
+                  ? LockedCard(
+                      item: p,
+                      titleKey: 'title',
+                      what: 'Progetto',
+                      onOpen: () async {
+                        if (await unlockItem(context, p, p.str('title'))) {
+                          if (!context.mounted) return;
+                          Navigator.of(context).push(MaterialPageRoute(
+                              builder: (_) =>
+                                  ProjectDetailPage(projectId: p.id)));
+                        }
+                      },
+                      onDelete: () async {
+                        if (await confirm(context,
+                            'Eliminare il progetto segreto "${p.str('title')}"?')) {
+                          ref.read(repoProvider).remove('projects', p.id);
+                        }
+                      },
+                    )
+                  : UCard(
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => ProjectDetailPage(projectId: p.id))),
                 child: Builder(builder: (context) {
@@ -124,6 +181,8 @@ class _ProjectFormState extends State<_ProjectForm> {
       TextEditingController(text: widget.item?.str('desc'));
   late String _icon = widget.item?.str('icon', '🎯') ?? '🎯';
   DateTime? _target;
+  late bool _secret = widget.item?.flag('locked') ?? false;
+  String? _newPin;
 
   @override
   void initState() {
@@ -157,6 +216,9 @@ class _ProjectFormState extends State<_ProjectForm> {
       'desc': _desc.text.trim(),
       'icon': _icon,
       'target': _target == null ? null : Timestamp.fromDate(_target!),
+      if (_secret && _newPin != null) ...secretFields(_newPin),
+      if (!_secret && (widget.item?.flag('locked') ?? false))
+        ...secretFields(null),
     };
     if (widget.item == null) {
       widget.repo.add('projects', {...data, 'status': 'active', 'steps': []});
@@ -231,6 +293,15 @@ class _ProjectFormState extends State<_ProjectForm> {
                   onPressed: () => setState(() => _target = null),
                   icon: const Icon(Icons.close)),
           ],
+        ),
+        const SizedBox(height: 14),
+        SecretSwitch(
+          value: _secret,
+          what: 'Progetto',
+          onChanged: (on, pin) => setState(() {
+            _secret = on;
+            _newPin = pin;
+          }),
         ),
         const SizedBox(height: 20),
         FilledButton(

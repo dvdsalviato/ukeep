@@ -109,6 +109,7 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
               label: 'Nuovo evento',
               onPressed: () => showEventSheet(context, repo, date: _selected)),
       body: ListView(
+        controller: tabScroll[3],
         padding: const EdgeInsets.only(bottom: 110),
         children: [
           const PageHeader(

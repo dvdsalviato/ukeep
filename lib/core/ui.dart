@@ -12,6 +12,20 @@ import 'theme.dart';
 /// Serve alla Home per aprire direttamente la sezione giusta.
 final ValueNotifier<int> listsSegment = ValueNotifier<int>(0);
 
+/// Scorrimento delle 4 schede (Home, Attività, Liste, Calendario):
+/// toccando di nuovo la scheda si torna in cima.
+final List<ScrollController> tabScroll =
+    List.generate(4, (_) => ScrollController());
+
+void scrollTabTop(int i) {
+  if (i < 0 || i >= tabScroll.length) return;
+  final c = tabScroll[i];
+  if (c.hasClients) {
+    c.animateTo(0,
+        duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
+  }
+}
+
 class GradientBg extends StatelessWidget {
   const GradientBg({super.key, required this.child});
   final Widget child;

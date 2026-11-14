@@ -5,9 +5,11 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:googleapis_auth/auth_io.dart';
+import 'package:home_widget/home_widget.dart';
 
 import '../data/repo.dart';
 import 'notifications.dart';
+import 'widget_sync.dart';
 
 /// Notifiche push al telefono del partner (abbraccio, "X ha aggiunto…").
 ///
@@ -54,17 +56,25 @@ class Push {
   String get myName => _first(_me, 'Il partner');
   String get partnerName => _first(partner, 'il partner');
 
-  void setMembers(List<Item> members, String? uid) {
+  void setMembers(List<Item> members, String? uid, {String? coupleId}) {
     _members = members;
     _uid = uid;
     final me = _me;
     if (me != null) receive.value = me.data['pushOff'] != true;
+    final p = partner;
+    WidgetSync.saveIdentity(
+      coupleId: coupleId,
+      myUid: uid,
+      myName: myName,
+      partnerUid: p?.id,
+      partnerName: partnerName,
+      partnerToken: p?.str('fcmToken') ?? '',
+      partnerOff: p?.data['pushOff'] == true,
+    );
   }
 
-  Future<void> init(String uid) async {
-    _uid = uid;
-    if (_inited) return;
-    _inited = true;
+  Future<void> _loadKey() async {
+    if (_sa != null) return;
     try {
       final raw = await rootBundle.loadString('assets/fcm_sa.json');
       final j = jsonDecode(raw) as Map<String, dynamic>;
@@ -72,6 +82,30 @@ class Push {
     } catch (_) {
       _sa = null;
     }
+  }
+
+  /// Per il widget (app chiusa): ricostruisce chi siamo dai dati salvati.
+  Future<void> initForWidget() async {
+    await _loadKey();
+    final myUid = await HomeWidget.getWidgetData<String>('myUid') ?? '';
+    final pUid = await HomeWidget.getWidgetData<String>('partnerUid') ?? '';
+    final myN = await HomeWidget.getWidgetData<String>('myName') ?? '';
+    final pN = await HomeWidget.getWidgetData<String>('partnerName') ?? '';
+    final tok = await HomeWidget.getWidgetData<String>('partnerToken') ?? '';
+    final off = await HomeWidget.getWidgetData<bool>('partnerOff') ?? false;
+    _uid = myUid;
+    _members = [
+      Item(myUid, {'name': myN}),
+      if (pUid.isNotEmpty)
+        Item(pUid, {'name': pN, 'fcmToken': tok, 'pushOff': off}),
+    ];
+  }
+
+  Future<void> init(String uid) async {
+    _uid = uid;
+    if (_inited) return;
+    _inited = true;
+    await _loadKey();
     try {
       final fm = FirebaseMessaging.instance;
       await fm.requestPermission();
@@ -82,6 +116,9 @@ class Push {
         final n = m.notification;
         if (n != null) {
           NotifService.instance.showPartner(n.title ?? 'Ukeep', n.body ?? '');
+        }
+        if (m.data['type'] == 'hug') {
+          WidgetSync.setHug('recv', from: m.data['from']);
         }
       });
     } catch (e) {
@@ -121,7 +158,10 @@ class Push {
   /// Manda una notifica al partner. Restituisce true se è partita.
   /// [tag]: notifiche con lo stesso tag si sostituiscono (niente pioggia).
   Future<bool> toPartner(
-      {required String title, required String body, String? tag}) async {
+      {required String title,
+      required String body,
+      String? tag,
+      Map<String, String>? data}) async {
     try {
       final p = partner;
       if (p == null || p.data['pushOff'] == true) return false;
@@ -139,6 +179,7 @@ class Push {
           'message': {
             'token': token,
             'notification': {'title': title, 'body': body},
+            if (data != null) 'data': data,
             'android': {
               'priority': 'HIGH',
               'notification': {
@@ -159,5 +200,13 @@ class Push {
       debugPrint('Push: $e');
       return false;
     }
+  }
+}
+
+/// Notifiche push arrivate con l'app chiusa: aggiorna il widget "Ti penso".
+@pragma('vm:entry-point')
+Future<void> firebaseBackgroundHandler(RemoteMessage m) async {
+  if (m.data['type'] == 'hug') {
+    await WidgetSync.setHug('recv', from: m.data['from']);
   }
 }

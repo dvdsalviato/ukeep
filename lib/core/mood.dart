@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../data/repo.dart';
 import 'feed.dart';
 import 'push.dart';
+import 'widget_sync.dart';
 import 'theme.dart';
 
 /// Umore del giorno: da triste a felice, arrabbiato, assonnato… e una cacca.
@@ -126,7 +127,9 @@ Future<void> sendHug(BuildContext context, Repo repo) async {
     title: '🤗 ${Push.instance.myName} ti pensa',
     body: 'Ti ha mandato un abbraccio',
     tag: 'hug',
+    data: {'type': 'hug', 'from': Push.instance.myName},
   );
+  WidgetSync.setHug('sent');
   m?.hideCurrentSnackBar();
   m?.showSnackBar(SnackBar(
       content: Text(ok

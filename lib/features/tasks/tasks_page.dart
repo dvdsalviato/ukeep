@@ -294,6 +294,7 @@ class _TasksPageState extends ConsumerState<TasksPage> {
               label: 'Nuova attività',
               onPressed: () => showTaskSheet(context, repo, members)),
       body: ListView(
+        controller: tabScroll[1],
         padding: const EdgeInsets.only(bottom: 110),
         children: [
           PageHeader(

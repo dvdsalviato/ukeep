@@ -51,6 +51,29 @@ if "UkeepWidget" not in m:
     mp.write_text(m)
     print("AndroidManifest: widget e push configurati")
 
+# --- Widget "Ti penso" e tocchi sui widget (in background)
+m = mp.read_text()
+if "UkeepHugWidget" not in m:
+    extra = (
+        '        <receiver android:name=".UkeepHugWidget" android:exported="true">\n'
+        "            <intent-filter>\n"
+        '                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />\n'
+        "            </intent-filter>\n"
+        '            <meta-data android:name="android.appwidget.provider" android:resource="@xml/ukeep_hug_widget_info" />\n'
+        "        </receiver>\n"
+        '        <receiver android:name="es.antonborri.home_widget.HomeWidgetBackgroundReceiver" android:exported="true">\n'
+        "            <intent-filter>\n"
+        '                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />\n'
+        "            </intent-filter>\n"
+        "        </receiver>\n"
+        '        <service android:name="es.antonborri.home_widget.HomeWidgetBackgroundService" '
+        'android:permission="android.permission.BIND_JOB_SERVICE" android:exported="true" />\n'
+        "    "
+    )
+    m = m.replace("</application>", extra + "</application>", 1)
+    mp.write_text(m)
+    print("AndroidManifest: widget Ti penso e tocchi configurati")
+
 # --- Apertura link (download aggiornamenti) su Android 11+
 m = mp.read_text()
 if "android.intent.action.VIEW" not in m:

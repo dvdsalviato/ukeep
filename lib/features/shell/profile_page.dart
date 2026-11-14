@@ -32,7 +32,7 @@ class ProfilePage extends ConsumerWidget {
     final count = (couple?['members'] as List?)?.length ?? 1;
 
     return ListView(
-      padding: const EdgeInsets.only(bottom: 40),
+      padding: EdgeInsets.only(bottom: 20 + bottomInset(context)),
       children: [
         const PageHeader(title: 'Profilo'),
         Padding(
@@ -195,55 +195,6 @@ class ProfilePage extends ConsumerWidget {
                   title: const Text('Esci (disconnetti)'),
                   onTap: () => ref.read(authServiceProvider).signOut(),
                 ),
-                Divider(height: 1, color: UColors.muted.withAlpha(40)),
-                ListTile(
-                  leading: Icon(Icons.heart_broken_outlined,
-                      color: UColors.danger),
-                  title: Text('Lascia la coppia',
-                      style: TextStyle(color: UColors.danger)),
-                  subtitle: const Text(
-                      'Esci da questo spazio: i dati restano al partner'),
-                  onTap: () async {
-                    final ok = await _sure(
-                        context,
-                        'Lasciare la coppia?',
-                        'Non vedrai più liste, attività e ricordi condivisi. '
-                            'Il partner li conserva. Potrai creare o unirti '
-                            'a un altro spazio.',
-                        'Lascia');
-                    if (!ok) return;
-                    await ref
-                        .read(coupleServiceProvider)
-                        .leaveCouple(user.uid, coupleId);
-                  },
-                ),
-                Divider(height: 1, color: UColors.muted.withAlpha(40)),
-                ListTile(
-                  leading: Icon(Icons.delete_forever_outlined,
-                      color: UColors.danger),
-                  title: Text('Elimina account',
-                      style: TextStyle(color: UColors.danger)),
-                  subtitle: const Text('Per sempre: ti chiederà di riconfermare Google'),
-                  onTap: () async {
-                    final ok = await _sure(
-                        context,
-                        'Eliminare l\'account?',
-                        'Il tuo profilo e il tuo accesso vengono cancellati '
-                            'per sempre. I dati condivisi restano al partner.',
-                        'Elimina');
-                    if (!ok) return;
-                    try {
-                      await ref
-                          .read(authServiceProvider)
-                          .deleteAccount(coupleId);
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text('Non riuscito: $e')));
-                      }
-                    }
-                  },
-                ),
               ],
             ),
           ),
@@ -259,13 +210,65 @@ class ProfilePage extends ConsumerWidget {
                       ? 'Ukeep · build ${AppVersion.build}'
                       : 'Ukeep',
                   style: TextStyle(color: UColors.muted, fontSize: 13)),
+            ],
+          ),
+        ),
+        // molto in basso, piccoli e lontani da tutto il resto
+        const SizedBox(height: 260),
+        Center(
+          child: Wrap(
+            spacing: 18,
+            children: [
               TextButton(
-                onPressed: openLatestApk,
-                child: const Text('Scarica l\'ultima versione'),
+                style: TextButton.styleFrom(
+                    foregroundColor: UColors.muted,
+                    textStyle: const TextStyle(fontSize: 12.5)),
+                onPressed: () async {
+                  final ok = await _sure(
+                      context,
+                      'Lasciare la coppia?',
+                      'Non vedrai più liste, attività e ricordi condivisi. '
+                          'Il partner li conserva. Potrai creare o unirti '
+                          'a un altro spazio.',
+                      'Lascia');
+                  if (!ok) return;
+                  await ref
+                      .read(coupleServiceProvider)
+                      .leaveCouple(user.uid, coupleId);
+                  if (context.mounted) Navigator.of(context).maybePop();
+                },
+                child: const Text('Lascia la coppia'),
+              ),
+              TextButton(
+                style: TextButton.styleFrom(
+                    foregroundColor: UColors.muted,
+                    textStyle: const TextStyle(fontSize: 12.5)),
+                onPressed: () async {
+                  final ok = await _sure(
+                      context,
+                      'Eliminare l\'account?',
+                      'Il tuo profilo e il tuo accesso vengono cancellati '
+                          'per sempre. I dati condivisi restano al partner.',
+                      'Elimina');
+                  if (!ok) return;
+                  try {
+                    await ref
+                        .read(authServiceProvider)
+                        .deleteAccount(coupleId);
+                    if (context.mounted) Navigator.of(context).maybePop();
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Non riuscito: $e')));
+                    }
+                  }
+                },
+                child: const Text('Elimina account'),
               ),
             ],
           ),
         ),
+        const SizedBox(height: 20),
       ],
     );
   }

@@ -6,7 +6,6 @@ import 'package:intl/intl.dart';
 
 import '../../core/feed.dart';
 import '../../core/mood.dart';
-import '../../core/notifications.dart';
 import '../../core/photo.dart';
 import '../../core/theme.dart';
 import '../../core/ui.dart';
@@ -15,6 +14,7 @@ import '../../data/repo.dart';
 import '../calendar/calendar_page.dart';
 import '../expenses/expenses_page.dart';
 import '../notes/postit.dart';
+import '../shell/app_drawer.dart';
 import '../polls/polls_page.dart';
 import '../search/search_page.dart';
 import '../stories/stories.dart';
@@ -117,16 +117,22 @@ class HomePage extends ConsumerWidget {
     return Stack(
       children: [
         ListView(
+      controller: tabScroll[0],
       padding: const EdgeInsets.only(bottom: 28),
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 8, 12, 0),
+          padding: const EdgeInsets.fromLTRB(10, 8, 12, 0),
           child: Row(
             children: [
+              IconButton(
+                tooltip: 'Menu',
+                onPressed: () => Scaffold.of(context).openDrawer(),
+                icon: Icon(Icons.menu, color: UColors.ink),
+              ),
+              const SizedBox(width: 4),
               Expanded(
                 child: Text(dateLabel,
-                    style:
-                        TextStyle(color: UColors.muted, fontSize: 15)),
+                    style: TextStyle(color: UColors.muted, fontSize: 15)),
               ),
               IconButton(
                 tooltip: 'Cerca',
@@ -134,29 +140,6 @@ class HomePage extends ConsumerWidget {
                     MaterialPageRoute(builder: (_) => const SearchPage())),
                 style: IconButton.styleFrom(backgroundColor: UColors.card),
                 icon: Icon(Icons.search, color: UColors.ink),
-              ),
-              const SizedBox(width: 6),
-              IconButton(
-                tooltip: isDark ? 'Tema chiaro' : 'Tema scuro',
-                onPressed: ThemeCtl.toggle,
-                style: IconButton.styleFrom(backgroundColor: UColors.card),
-                icon: Icon(
-                    isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-                    color: UColors.ink),
-              ),
-              const SizedBox(width: 6),
-              ValueListenableBuilder<NotifSettings>(
-                valueListenable: NotifService.instance.settings,
-                builder: (context, s, _) => IconButton(
-                  tooltip: 'Notifiche',
-                  onPressed: () => showNotifSheet(context),
-                  style: IconButton.styleFrom(backgroundColor: UColors.card),
-                  icon: Icon(
-                      s.enabled
-                          ? Icons.notifications_none
-                          : Icons.notifications_off_outlined,
-                      color: UColors.ink),
-                ),
               ),
             ],
           ),
@@ -303,7 +286,7 @@ class HomePage extends ConsumerWidget {
         if (repo != null && partnerItems.isEmpty)
           Center(
             child: TextButton(
-              onPressed: () => onGoTo(4),
+              onPressed: () => openProfile(context),
               child: const Text('🤗 Invita il partner: potrete mandarvi abbracci'),
             ),
           ),
@@ -352,16 +335,18 @@ class HomePage extends ConsumerWidget {
             child: Row(
               children: [
                 _Stat(
-                    value: since == null
-                        ? '—'
-                        : '${today.difference(dayOnly(since)).inDays}',
-                    label: 'giorni insieme',
-                    onTap: repo == null ? null : () => _pickSince(context, repo, since)),
+                    value: '${feed.where((f) => f.str('by') != me?.uid && f.date('at') != null && DateTime.now().difference(f.date('at')!).inHours < 24).length}',
+                    label: 'novità',
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => const FeedPage()))),
                 _vline(),
                 _Stat(
-                    value: '$streak',
-                    label: 'serie',
-                    onTap: () => onGoTo(1)),
+                    value: '${lists.length}',
+                    label: 'liste',
+                    onTap: () {
+                      listsSegment.value = 0;
+                      onGoTo(2);
+                    }),
                 _vline(),
                 _Stat(
                     value: '${open.length}',

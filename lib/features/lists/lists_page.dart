@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -54,12 +55,11 @@ class ListsHub extends ConsumerWidget {
           floatingActionButton:
               add == null ? null : pillFab(label: label, onPressed: add),
           body: ListView(
+            controller: tabScroll[2],
             padding: const EdgeInsets.only(bottom: 110),
             children: [
-              const PageHeader(
-                  title: 'Liste', subtitle: 'Tutto quello che condividete'),
-              _Seg(value: seg, onChanged: (v) => listsSegment.value = v),
-              const SizedBox(height: 12),
+              _SectionHeader(seg: seg),
+              const SizedBox(height: 8),
               if (seg == 0) const ListsSection(),
               if (seg == 1) const WishesSection(),
               if (seg == 2) const ProjectsSection(),
@@ -73,43 +73,142 @@ class ListsHub extends ConsumerWidget {
   }
 }
 
-class _Seg extends StatelessWidget {
-  const _Seg({required this.value, required this.onChanged});
-  final int value;
-  final ValueChanged<int> onChanged;
+const _sections = <List<String>>[
+  ['📝', 'Liste', 'Spesa, film, idee: spuntate in due'],
+  ['⭐', 'Desideri', 'Quello che vorreste ricevere'],
+  ['🎯', 'Progetti', 'Le cose grandi, un passo alla volta'],
+  ['💸', 'Spese', 'Chi ha pagato e chi deve a chi'],
+  ['🗳️', 'Sondaggi', 'Votate e decidete insieme'],
+];
+
+/// Titolo grande con la sezione attuale: toccandolo si apre il menu a
+/// tendina con tutte le sezioni.
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.seg});
+  final int seg;
 
   @override
   Widget build(BuildContext context) {
-    const labels = ['📝 Liste', '⭐ Desideri', '🎯 Progetti', '💸 Spese', '🗳️ Sondaggi'];
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          for (var i = 0; i < labels.length; i++)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: GestureDetector(
-                onTap: () => onChanged(i),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: value == i ? UColors.dark : UColors.card,
-                    borderRadius: BorderRadius.circular(26),
+    final cur = _sections[seg];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(22),
+        onTap: () => _openSections(context),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(cur[0], style: const TextStyle(fontSize: 34)),
+                  const SizedBox(width: 10),
+                  Flexible(child: Text(cur[1], style: serif(40))),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                        color: UColors.card, shape: BoxShape.circle),
+                    child: Icon(Icons.keyboard_arrow_down,
+                        color: UColors.ink, size: 26),
                   ),
-                  child: Text(labels[i],
-                      style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: value == i ? UColors.onDark : UColors.ink)),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text('${cur[2]} · tocca per cambiare sezione',
+                  style: TextStyle(color: UColors.muted, fontSize: 14)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+void _openSections(BuildContext context) {
+  showUSheet(
+    context,
+    Consumer(builder: (ctx, ref, _) {
+      final me = FirebaseAuth.instance.currentUser?.uid;
+      final lists = ref.watch(listsProvider).value ?? [];
+      final wishes = ref.watch(wishesProvider).value ?? [];
+      final projects = ref.watch(projectsProvider).value ?? [];
+      final expenses = ref.watch(expensesProvider).value ?? [];
+      final polls = ref.watch(pollsProvider).value ?? [];
+      final toVote = polls.where((p) => pollNeedsMyVote(p, me)).length;
+      final bal = expenseBalance(expenses, me);
+      final info = <String>[
+        lists.isEmpty ? 'Nessuna lista' : '${lists.length} liste',
+        wishes.isEmpty ? 'Ancora nessuno' : '${wishes.length} desideri',
+        '${projects.where((p) => p.str('status') != 'done').length} in corso',
+        expenses.isEmpty
+            ? 'Nessuna spesa'
+            : (bal.abs() < 0.01
+                ? 'Siete pari'
+                : (bal > 0 ? 'Ti devono ${eur(bal)}' : 'Devi ${eur(-bal)}')),
+        toVote > 0 ? '$toVote da votare' : '${polls.length} sondaggi',
+      ];
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('Sezioni', style: serif(28)),
+          const SizedBox(height: 10),
+          for (var i = 0; i < _sections.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Material(
+                color: listsSegment.value == i
+                    ? UColors.rose.withAlpha(70)
+                    : UColors.bgMid,
+                borderRadius: BorderRadius.circular(20),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: () {
+                    listsSegment.value = i;
+                    Navigator.pop(ctx);
+                    scrollTabTop(2);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                    child: Row(
+                      children: [
+                        Text(_sections[i][0],
+                            style: const TextStyle(fontSize: 28)),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(_sections[i][1],
+                                  style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w700)),
+                              Text(_sections[i][2],
+                                  style: TextStyle(
+                                      color: UColors.muted, fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                        Text(info[i],
+                            style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                                color: i == 4 && toVote > 0
+                                    ? UColors.danger
+                                    : UColors.accent)),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
         ],
-      ),
-    );
-  }
+      );
+    }),
+  );
 }
 
 class ListsSection extends ConsumerWidget {

@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../core/mood.dart';
 import '../../core/notifications.dart';
@@ -17,7 +16,7 @@ import '../expenses/expenses_page.dart';
 import '../home/home_page.dart';
 import '../lists/lists_page.dart';
 import '../tasks/tasks_page.dart';
-import 'profile_page.dart';
+import 'app_drawer.dart';
 
 class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key, required this.coupleId});
@@ -42,7 +41,9 @@ class _HomeShellState extends ConsumerState<HomeShell>
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid != null) Push.instance.init(uid);
       final m = ref.read(membersProvider).value;
-      if (m != null) Push.instance.setMembers(m, uid);
+      if (m != null) {
+        Push.instance.setMembers(m, uid, coupleId: widget.coupleId);
+      }
       _syncWidget();
       _checkMood();
     });
@@ -74,7 +75,6 @@ class _HomeShellState extends ConsumerState<HomeShell>
     final uid = FirebaseAuth.instance.currentUser?.uid;
     final tasks = ref.read(tasksProvider).value ?? [];
     final events = ref.read(eventsProvider).value ?? [];
-    final couple = ref.read(coupleDocProvider).value;
     final today = dayOnly(DateTime.now());
     final todayTasks = tasks.where((t) {
       if (t.flag('done')) return false;
@@ -82,11 +82,8 @@ class _HomeShellState extends ConsumerState<HomeShell>
       if (a != null && a != uid) return false;
       final d = t.date('due');
       return d != null && !dayOnly(d).isAfter(today);
-    }).map((t) => t.str('title')).toList();
-    final since = couple?['since'];
-    final together = since is Timestamp
-        ? togetherText(since.toDate())
-        : 'Ukeep';
+    }).toList()
+      ..sort(compareOpen);
     DateTime? best;
     String next = '';
     for (final e in events) {
@@ -99,7 +96,8 @@ class _HomeShellState extends ConsumerState<HomeShell>
             : '⏳ ${e.str('title')} tra $days ${days == 1 ? 'giorno' : 'giorni'}';
       }
     }
-    WidgetSync.update(together: together, today: todayTasks, next: next);
+    WidgetSync.update(
+        coupleId: widget.coupleId, today: todayTasks, next: next);
   }
 
   @override
@@ -129,8 +127,13 @@ class _HomeShellState extends ConsumerState<HomeShell>
   /// Schede visitate, per il tasto indietro.
   final List<int> _history = [];
 
+  final _scaffold = GlobalKey<ScaffoldState>();
+
   void _go(int i) {
-    if (i == _index) return;
+    if (i == _index) {
+      scrollTabTop(i);
+      return;
+    }
     setState(() {
       _history.remove(_index);
       _history.add(_index);
@@ -140,6 +143,10 @@ class _HomeShellState extends ConsumerState<HomeShell>
   }
 
   Future<void> _back() async {
+    if (_scaffold.currentState?.isDrawerOpen ?? false) {
+      _scaffold.currentState?.closeDrawer();
+      return;
+    }
     if (_history.isNotEmpty) {
       setState(() => _index = _history.removeLast());
       return;
@@ -179,7 +186,8 @@ class _HomeShellState extends ConsumerState<HomeShell>
     ref.listen(membersProvider, (prev, next) {
       final m = next.value;
       if (m == null) return;
-      Push.instance.setMembers(m, FirebaseAuth.instance.currentUser?.uid);
+      Push.instance.setMembers(m, FirebaseAuth.instance.currentUser?.uid,
+          coupleId: widget.coupleId);
       if (!_moodAsked) _checkMood();
     });
     ref.listen(eventsProvider, (prev, next) => _syncWidget());
@@ -196,7 +204,6 @@ class _HomeShellState extends ConsumerState<HomeShell>
       const TasksPage(),
       const ListsHub(),
       const CalendarPage(),
-      ProfilePage(coupleId: widget.coupleId),
     ];
     return PopScope(
       canPop: false,
@@ -204,6 +211,8 @@ class _HomeShellState extends ConsumerState<HomeShell>
         if (!didPop) _back();
       },
       child: Scaffold(
+      key: _scaffold,
+      drawer: AppDrawer(coupleId: widget.coupleId),
       body: SafeArea(bottom: false, child: IndexedStack(index: _index, children: pages)),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -255,10 +264,6 @@ class _HomeShellState extends ConsumerState<HomeShell>
                   icon: Icon(Icons.calendar_month_outlined),
                   selectedIcon: Icon(Icons.calendar_month),
                   label: 'Calendario'),
-              NavigationDestination(
-                  icon: Icon(Icons.person_outline),
-                  selectedIcon: Icon(Icons.person),
-                  label: 'Profilo'),
             ],
           ),
         ),

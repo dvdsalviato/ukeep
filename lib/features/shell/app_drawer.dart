@@ -2,13 +2,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/feed.dart';
 import '../../core/notifications.dart';
 import '../../core/theme.dart';
 import '../../core/ui.dart';
 import '../../core/update.dart';
 import '../../data/providers.dart';
-import '../search/search_page.dart';
 import '../tasks/tasks_page.dart';
 import 'profile_page.dart';
 
@@ -41,9 +39,25 @@ class AppDrawer extends ConsumerWidget {
       action();
     }
 
+    final titleStyle = TextStyle(
+        color: UColors.accent, fontWeight: FontWeight.w700, fontSize: 16.5);
+    final subStyle = TextStyle(color: UColors.muted, fontSize: 13);
     return Drawer(
-      backgroundColor: UColors.surface,
-      child: SafeArea(
+      backgroundColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.horizontal(right: Radius.circular(32))),
+      clipBehavior: Clip.antiAlias,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [UColors.bgTop, UColors.bgMid, UColors.bgBottom],
+          ),
+        ),
+        child: ListTileTheme(
+          iconColor: UColors.accent,
+          child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -66,7 +80,9 @@ class AppDrawer extends ConsumerWidget {
                           Text(me?.displayName ?? 'Profilo',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: serif(22)),
+                              style: serif(24,
+                                  style: FontStyle.italic,
+                                  color: UColors.accent)),
                           Text('Il tuo profilo ›',
                               style: TextStyle(color: UColors.muted)),
                         ],
@@ -80,14 +96,14 @@ class AppDrawer extends ConsumerWidget {
             const SizedBox(height: 8),
             ListTile(
               leading: const Icon(Icons.person_outline),
-              title: const Text('Profilo'),
-              subtitle: const Text('Foto, data di inizio, impronta'),
+              title: Text('Profilo', style: titleStyle),
+              subtitle: Text('Foto, data di inizio, impronta', style: subStyle),
               onTap: () => go(() => openProfile(context)),
             ),
             ListTile(
               leading: const Icon(Icons.notifications_none),
-              title: const Text('Notifiche'),
-              subtitle: const Text('Mattino, sera, promemoria'),
+              title: Text('Notifiche', style: titleStyle),
+              subtitle: Text('Mattino, sera, promemoria', style: subStyle),
               onTap: () => go(() => showNotifSheet(context)),
             ),
             ValueListenableBuilder<bool>(
@@ -96,7 +112,7 @@ class AppDrawer extends ConsumerWidget {
                 secondary: Icon(dark
                     ? Icons.dark_mode_outlined
                     : Icons.light_mode_outlined),
-                title: const Text('Tema scuro'),
+                title: Text('Tema scuro', style: titleStyle),
                 value: dark,
                 activeThumbColor: UColors.dark,
                 onChanged: (_) {
@@ -105,31 +121,22 @@ class AppDrawer extends ConsumerWidget {
                 },
               ),
             ),
-            ListTile(
-              leading: const Icon(Icons.forum_outlined),
-              title: const Text('Novità'),
-              subtitle: const Text('Tutto quello che avete fatto'),
-              onTap: () => go(() => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const FeedPage()))),
-            ),
-            ListTile(
-              leading: const Icon(Icons.search),
-              title: const Text('Cerca'),
-              onTap: () => go(() => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const SearchPage()))),
-            ),
             const Spacer(),
             Divider(height: 1, color: UColors.muted.withAlpha(40)),
             ListTile(
               leading: Image.asset('assets/logo.png', width: 28, height: 28),
-              title: Text(AppVersion.build > 0
-                  ? 'Ukeep · build ${AppVersion.build}'
-                  : 'Ukeep'),
-              subtitle: const Text('Scarica l\'ultima versione'),
+              title: Text(
+                  AppVersion.build > 0
+                      ? 'Ukeep · build ${AppVersion.build}'
+                      : 'Ukeep',
+                  style: titleStyle),
+              subtitle: Text('Scarica l\'ultima versione', style: subStyle),
               onTap: () => go(openLatestApk),
             ),
             const SizedBox(height: 8),
           ],
+        ),
+      ),
         ),
       ),
     );

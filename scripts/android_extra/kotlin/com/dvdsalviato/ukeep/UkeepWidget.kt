@@ -11,10 +11,10 @@ import es.antonborri.home_widget.HomeWidgetLaunchIntent
 import es.antonborri.home_widget.HomeWidgetProvider
 import org.json.JSONArray
 
-/** Widget "Attività di oggi": si spuntano toccandole. */
+/** Widget "Attività": le cose da fare, si spuntano toccandole. */
 class UkeepWidget : HomeWidgetProvider() {
-    private val rows = intArrayOf(R.id.w_row0, R.id.w_row1, R.id.w_row2, R.id.w_row3, R.id.w_row4, R.id.w_row5)
-    private val texts = intArrayOf(R.id.w_t0, R.id.w_t1, R.id.w_t2, R.id.w_t3, R.id.w_t4, R.id.w_t5)
+    private val rows = intArrayOf(R.id.w_row0, R.id.w_row1, R.id.w_row2, R.id.w_row3, R.id.w_row4, R.id.w_row5, R.id.w_row6, R.id.w_row7)
+    private val texts = intArrayOf(R.id.w_t0, R.id.w_t1, R.id.w_t2, R.id.w_t3, R.id.w_t4, R.id.w_t5, R.id.w_t6, R.id.w_t7)
 
     override fun onUpdate(
         context: Context,
@@ -29,17 +29,19 @@ class UkeepWidget : HomeWidgetProvider() {
         }
         appWidgetIds.forEach { widgetId ->
             val views = RemoteViews(context.packageName, R.layout.ukeep_widget)
-            views.setTextViewText(R.id.w_count, widgetData.getString("count", "Apri Ukeep per aggiornare"))
+            views.setTextViewText(R.id.w_count, widgetData.getString("count", "Attività"))
             views.setTextViewText(R.id.w_next, widgetData.getString("next", ""))
             for (i in rows.indices) {
                 if (i < arr.length()) {
                     val o = arr.getJSONObject(i)
                     views.setViewVisibility(rows[i], View.VISIBLE)
                     views.setTextViewText(texts[i], o.optString("t"))
-                    val pi = HomeWidgetBackgroundIntent.getBroadcast(
-                        context, Uri.parse("ukeep://done?id=" + Uri.encode(o.optString("id")))
+                    views.setOnClickPendingIntent(
+                        rows[i],
+                        HomeWidgetBackgroundIntent.getBroadcast(
+                            context, Uri.parse("ukeep://done?id=" + Uri.encode(o.optString("id")))
+                        )
                     )
-                    views.setOnClickPendingIntent(rows[i], pi)
                 } else {
                     views.setViewVisibility(rows[i], View.GONE)
                 }

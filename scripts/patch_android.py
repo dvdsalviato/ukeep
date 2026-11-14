@@ -61,6 +61,12 @@ if "UkeepHugWidget" not in m:
         "            </intent-filter>\n"
         '            <meta-data android:name="android.appwidget.provider" android:resource="@xml/ukeep_hug_widget_info" />\n'
         "        </receiver>\n"
+        '        <receiver android:name=".UkeepListWidget" android:exported="true">\n'
+        "            <intent-filter>\n"
+        '                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />\n'
+        "            </intent-filter>\n"
+        '            <meta-data android:name="android.appwidget.provider" android:resource="@xml/ukeep_list_widget_info" />\n'
+        "        </receiver>\n"
         '        <receiver android:name="es.antonborri.home_widget.HomeWidgetBackgroundReceiver" android:exported="true">\n'
         "            <intent-filter>\n"
         '                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />\n'

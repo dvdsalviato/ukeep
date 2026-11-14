@@ -121,15 +121,21 @@ class HomePage extends ConsumerWidget {
       padding: const EdgeInsets.only(bottom: 28),
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(10, 8, 12, 0),
+          padding: const EdgeInsets.fromLTRB(14, 8, 12, 0),
           child: Row(
             children: [
+              // apre il menu laterale
               IconButton(
                 tooltip: 'Menu',
                 onPressed: () => Scaffold.of(context).openDrawer(),
-                icon: Icon(Icons.menu, color: UColors.ink),
+                style: IconButton.styleFrom(
+                  backgroundColor: UColors.card,
+                  side: BorderSide(color: UColors.muted.withAlpha(60)),
+                ),
+                icon: Icon(Icons.chevron_right_rounded,
+                    color: UColors.accent, size: 28),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(dateLabel,
                     style: TextStyle(color: UColors.muted, fontSize: 15)),

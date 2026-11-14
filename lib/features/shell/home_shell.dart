@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,10 +9,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/mood.dart';
 import '../../core/notifications.dart';
 import '../../core/push.dart';
+import '../../core/sub_items.dart';
 import '../../core/widget_sync.dart';
 import '../../core/theme.dart';
 import '../../core/ui.dart';
 import '../../data/providers.dart';
+import '../../data/repo.dart';
 import '../calendar/calendar_page.dart';
 import '../expenses/expenses_page.dart';
 import '../home/home_page.dart';
@@ -46,6 +50,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
       }
       _syncWidget();
       _checkMood();
+      _syncListWidget();
     });
   }
 
@@ -79,9 +84,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
     final todayTasks = tasks.where((t) {
       if (t.flag('done')) return false;
       final a = t.data['assignee'] as String?;
-      if (a != null && a != uid) return false;
-      final d = t.date('due');
-      return d != null && !dayOnly(d).isAfter(today);
+      return a == null || a == uid;
     }).toList()
       ..sort(compareOpen);
     DateTime? best;
@@ -92,16 +95,41 @@ class _HomeShellState extends ConsumerState<HomeShell>
         best = n;
         final days = n.difference(today).inDays;
         next = days == 0
-            ? '🎉 Oggi: ${e.str('title')}'
-            : '⏳ ${e.str('title')} tra $days ${days == 1 ? 'giorno' : 'giorni'}';
+            ? '📅 Oggi in calendario: ${e.str('title')}'
+            : '📅 ${e.str('title')} tra $days ${days == 1 ? 'giorno' : 'giorni'}';
       }
     }
     WidgetSync.update(
         coupleId: widget.coupleId, today: todayTasks, next: next);
   }
 
+  StreamSubscription<List<Item>>? _wlSub;
+  String? _wlId;
+
+  /// Widget "Lista": segue la lista scelta (si cambia dal widget).
+  Future<void> _syncListWidget() async {
+    final repo = ref.read(repoProvider);
+    final lists = ref.read(listsProvider).value;
+    if (repo == null || lists == null) return;
+    final id = await WidgetSync.updateLists(lists);
+    if (id == null || !mounted) return;
+    Item? l;
+    for (final x in lists) {
+      if (x.id == id) l = x;
+    }
+    if (l == null) return;
+    final title = '${l.str('icon', '📝')} ${l.str('name')}';
+    if (id == _wlId && _wlSub != null) return;
+    _wlId = id;
+    await _wlSub?.cancel();
+    _wlSub = SubItems(repo, 'lists', id, 'items')
+        .watch()
+        .listen((items) => WidgetSync.updateListItems(id, title, items));
+  }
+
   @override
   void dispose() {
+    _wlSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -113,6 +141,8 @@ class _HomeShellState extends ConsumerState<HomeShell>
       _syncWidget();
       _checkMood();
       _recurring();
+      _wlId = null;
+      _syncListWidget();
     }
   }
 
@@ -191,6 +221,10 @@ class _HomeShellState extends ConsumerState<HomeShell>
       if (!_moodAsked) _checkMood();
     });
     ref.listen(eventsProvider, (prev, next) => _syncWidget());
+    ref.listen(listsProvider, (prev, next) {
+      _wlId = null;
+      _syncListWidget();
+    });
     ref.listen(expensesProvider, (prev, next) {
       final ex = next.value;
       if (ex == null) return;

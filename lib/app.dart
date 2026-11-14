@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/app_lock.dart';
 import 'core/theme.dart';
 import 'core/ui.dart';
 import 'core/update.dart';
@@ -38,7 +39,8 @@ class UkeepApp extends StatelessWidget {
             value: systemBars,
             child: MediaQuery(
               data: mq.copyWith(textScaler: TextScaler.linear(sys * 0.9)),
-              child: GradientBg(child: child ?? const SizedBox.shrink()),
+              child: GradientBg(
+                  child: AppLock(child: child ?? const SizedBox.shrink())),
             ),
           );
         },

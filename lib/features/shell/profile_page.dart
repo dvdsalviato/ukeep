@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/app_lock.dart';
 import '../../core/photo.dart';
 import '../../core/theme.dart';
 import '../../core/ui.dart';
@@ -166,6 +167,27 @@ class ProfilePage extends ConsumerWidget {
                           );
                           if (d != null) repo.setSince(d);
                         },
+                ),
+                Divider(height: 1, color: UColors.muted.withAlpha(40)),
+                ValueListenableBuilder<bool>(
+                  valueListenable: LockCtl.enabled,
+                  builder: (context, on, _) => SwitchListTile(
+                    secondary: const Icon(Icons.fingerprint),
+                    title: const Text('Blocco con impronta'),
+                    subtitle: const Text(
+                        'Facoltativo, solo su questo telefono'),
+                    value: on,
+                    activeThumbColor: UColors.dark,
+                    onChanged: (v) async {
+                      final ok = await LockCtl.set(v);
+                      if (!ok && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text(
+                                    'Non riuscito: imposta un\'impronta o un blocco schermo nel telefono')));
+                      }
+                    },
+                  ),
                 ),
                 Divider(height: 1, color: UColors.muted.withAlpha(40)),
                 ListTile(

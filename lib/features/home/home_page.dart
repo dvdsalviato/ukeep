@@ -14,6 +14,7 @@ import '../../data/providers.dart';
 import '../../data/repo.dart';
 import '../calendar/calendar_page.dart';
 import '../expenses/expenses_page.dart';
+import '../notes/postit.dart';
 import '../polls/polls_page.dart';
 import '../search/search_page.dart';
 import '../stories/stories.dart';
@@ -113,7 +114,9 @@ class HomePage extends ConsumerWidget {
 
     final dateLabel = capitalize(DateFormat('EEEE d MMMM', 'it_IT').format(today));
 
-    return ListView(
+    return Stack(
+      children: [
+        ListView(
       padding: const EdgeInsets.only(bottom: 28),
       children: [
         Padding(
@@ -276,7 +279,15 @@ class HomePage extends ConsumerWidget {
               ),
               onPressed: () => sendHug(context, repo),
               icon: const Text('🤗', style: TextStyle(fontSize: 18)),
-              label: Text('Manda un abbraccio a $partnerName'),
+              label: Text('Abbraccio a $partnerName'),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Center(
+            child: TextButton.icon(
+              onPressed: () => writePostIt(context, repo),
+              icon: const Text('📝', style: TextStyle(fontSize: 16)),
+              label: Text('Lascia un post-it a $partnerName'),
             ),
           ),
           if (hugFromPartner)
@@ -585,6 +596,12 @@ class HomePage extends ConsumerWidget {
               ),
             ],
           ),
+        ),
+      ],
+    ),
+        const Align(
+          alignment: Alignment(0, -0.15),
+          child: StuckPostIt(),
         ),
       ],
     );

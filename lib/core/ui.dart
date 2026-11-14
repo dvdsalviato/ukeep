@@ -391,6 +391,7 @@ Future<void> itemMenu(
   BuildContext context, {
   required String title,
   VoidCallback? onOpen,
+  String openLabel = 'Apri',
   VoidCallback? onEdit,
   String editLabel = 'Modifica',
   VoidCallback? onDelete,
@@ -410,7 +411,7 @@ Future<void> itemMenu(
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.open_in_new),
-              title: const Text('Apri'),
+              title: Text(openLabel),
               onTap: () => Navigator.pop(ctx, 'open'),
             ),
           if (onEdit != null)

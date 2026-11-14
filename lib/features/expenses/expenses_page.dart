@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/attach.dart';
 import '../../core/feed.dart';
 import '../../core/push.dart';
 import '../../core/theme.dart';
@@ -183,6 +184,16 @@ class ExpensesSection extends ConsumerWidget {
               ],
             ),
           ),
+          if (all.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            ExpenseStats(
+                all: all,
+                repo: repo,
+                budget: ((ref.watch(coupleDocProvider).value?['budget']
+                            as num?) ??
+                        0)
+                    .toDouble()),
+          ],
           if (all.isEmpty) ...[
             const SizedBox(height: 14),
             const EmptyCard(
@@ -409,7 +420,12 @@ class _ExpenseRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(e.str('title'),
+                  Text(
+                      [
+                        e.str('title'),
+                        if (e.str('repeat').isNotEmpty) '🔁',
+                        if (e.str('photoId').isNotEmpty) '📎',
+                      ].join(' '),
                       style: const TextStyle(
                           fontSize: 16, fontWeight: FontWeight.w600)),
                   Text(
@@ -432,17 +448,307 @@ class _ExpenseRow extends StatelessWidget {
   }
 }
 
+// ------------------------------------------------- spese che si ripetono
+
+const expenseRepeatLabels = <String, String>{
+  '': 'Una volta',
+  'w': 'Ogni settimana',
+  'm': 'Ogni mese',
+  'y': 'Ogni anno',
+};
+
+final Set<String> _repeatDone = {};
+
+/// Aggiunge le spese ricorrenti arrivate a scadenza. L'id della copia è
+/// fisso (spesa + giorno): se lo fanno entrambi i telefoni non si doppia.
+Future<void> processRecurringExpenses(Repo repo, List<Item> expenses) async {
+  final today = dayOnly(DateTime.now());
+  for (final e in expenses) {
+    final r = e.str('repeat');
+    final n0 = e.date('next');
+    if (r.isEmpty || n0 == null) continue;
+    DateTime next = dayOnly(n0);
+    if (next.isAfter(today)) continue;
+    final key = '${e.id}|${next.millisecondsSinceEpoch}';
+    if (_repeatDone.contains(key)) continue;
+    _repeatDone.add(key);
+    final b = FirebaseFirestore.instance.batch();
+    var n = 0;
+    while (!next.isAfter(today) && n < 24) {
+      final id = '${e.id}_${DateFormat('yyyyMMdd').format(next)}';
+      b.set(repo.col('expenses').doc(id), {
+        'title': e.str('title'),
+        'amount': e.data['amount'],
+        if (e.data['paid'] != null) 'paid': e.data['paid'],
+        if (e.data['owe'] != null) 'owe': e.data['owe'],
+        if (e.data['paidBy'] != null) 'paidBy': e.data['paidBy'],
+        if (e.data['otherPct'] != null) 'otherPct': e.data['otherPct'],
+        'icon': e.str('icon', '💸'),
+        'kind': 'expense',
+        'date': Timestamp.fromDate(next),
+        'fromRepeat': e.id,
+        'by': e.data['by'],
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      next = nextRepeat(next, r);
+      n++;
+    }
+    b.update(
+        repo.col('expenses').doc(e.id), {'next': Timestamp.fromDate(next)});
+    try {
+      await b.commit();
+    } catch (_) {
+      _repeatDone.remove(key);
+    }
+  }
+}
+
+DateTime firstRepeatAfterToday(DateTime from, String r) {
+  final today = dayOnly(DateTime.now());
+  var n = nextRepeat(from, r);
+  while (n.isBefore(today)) {
+    n = nextRepeat(n, r);
+  }
+  return n;
+}
+
+// ------------------------------------------------------- statistiche
+
+const expenseCategories = <String, String>{
+  '🛒': 'Spesa',
+  '🍽️': 'Ristoranti',
+  '🏠': 'Casa',
+  '💡': 'Bollette',
+  '⛽': 'Auto',
+  '✈️': 'Viaggi',
+  '🎉': 'Svago',
+  '🎁': 'Regali',
+  '💊': 'Salute',
+  '📦': 'Altro',
+};
+
+double monthTotal(List<Item> all, int year, int month) => all
+    .where((e) =>
+        e.str('kind') != 'settle' &&
+        e.date('date') != null &&
+        e.date('date')!.year == year &&
+        e.date('date')!.month == month)
+    .fold<double>(0, (s, e) => s + expenseAmount(e));
+
+Future<void> setBudget(BuildContext context, Repo repo, double current) async {
+  final c = TextEditingController(
+      text: current > 0 ? current.toStringAsFixed(0) : '');
+  final v = await showDialog<double>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Budget mensile'),
+      content: TextField(
+        controller: c,
+        autofocus: true,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: fieldDeco('Quanto al mese (€)', hint: 'Es. 600'),
+      ),
+      actions: [
+        if (current > 0)
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, 0.0),
+              child: const Text('Togli budget')),
+        TextButton(
+            onPressed: () => Navigator.pop(ctx), child: const Text('Annulla')),
+        TextButton(
+            onPressed: () => Navigator.pop(ctx, parseEuro(c.text)),
+            child: const Text('Salva')),
+      ],
+    ),
+  );
+  if (v == null) return;
+  await FirebaseFirestore.instance
+      .collection('couples')
+      .doc(repo.coupleId)
+      .update({'budget': v});
+}
+
+/// Grafico del mese per categoria + budget.
+class ExpenseStats extends StatefulWidget {
+  const ExpenseStats(
+      {super.key, required this.all, required this.repo, required this.budget});
+  final List<Item> all;
+  final Repo repo;
+  final double budget;
+
+  @override
+  State<ExpenseStats> createState() => _ExpenseStatsState();
+}
+
+class _ExpenseStatsState extends State<ExpenseStats> {
+  late DateTime _m = DateTime(DateTime.now().year, DateTime.now().month);
+
+  @override
+  Widget build(BuildContext context) {
+    final y = _m.year, mo = _m.month;
+    final prev = DateTime(y, mo - 1);
+    final items = widget.all.where((e) =>
+        e.str('kind') != 'settle' &&
+        e.date('date') != null &&
+        e.date('date')!.year == y &&
+        e.date('date')!.month == mo);
+    final byCat = <String, double>{};
+    for (final e in items) {
+      final k = e.str('icon', '📦');
+      byCat[k] = (byCat[k] ?? 0) + expenseAmount(e);
+    }
+    final cats = byCat.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final total = byCat.values.fold<double>(0, (a, b) => a + b);
+    final before = monthTotal(widget.all, prev.year, prev.month);
+    final maxV = cats.isEmpty ? 1.0 : cats.first.value;
+    final isNow = y == DateTime.now().year && mo == DateTime.now().month;
+    final b = widget.budget;
+    final used = b > 0 ? total / b : 0.0;
+    final monthName = DateFormat('MMMM', 'it_IT').format(_m);
+
+    return UCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.chevron_left),
+                onPressed: () => setState(() => _m = DateTime(y, mo - 1)),
+              ),
+              Expanded(
+                child: Text(
+                    capitalize(DateFormat('MMMM y', 'it_IT').format(_m)),
+                    textAlign: TextAlign.center,
+                    style: serif(22)),
+              ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.chevron_right),
+                onPressed: isNow
+                    ? null
+                    : () => setState(() => _m = DateTime(y, mo + 1)),
+              ),
+            ],
+          ),
+          Center(
+            child: Text(eur(total),
+                style: serif(34, color: UColors.accent)),
+          ),
+          if (before > 0)
+            Center(
+              child: Text(
+                  () {
+                    final d = (total - before) / before * 100;
+                    final m = DateFormat('MMMM', 'it_IT').format(prev);
+                    if (d.abs() < 1) return 'Come a $m';
+                    return '${d > 0 ? '+' : ''}${d.round()}% rispetto a $m';
+                  }(),
+                  style: TextStyle(color: UColors.muted, fontSize: 13)),
+            ),
+          const SizedBox(height: 12),
+          if (cats.isEmpty)
+            Text('Nessuna spesa in questo mese.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: UColors.muted))
+          else
+            for (final c in cats)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    SizedBox(
+                        width: 30,
+                        child: Text(c.key, style: const TextStyle(fontSize: 20))),
+                    SizedBox(
+                      width: 86,
+                      child: Text(expenseCategories[c.key] ?? 'Altro',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 13.5)),
+                    ),
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: LinearProgressIndicator(
+                          value: c.value / maxV,
+                          minHeight: 10,
+                          backgroundColor: UColors.bgMid,
+                          color: UColors.rose,
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 84,
+                      child: Text(eur(c.value),
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700, fontSize: 13.5)),
+                    ),
+                  ],
+                ),
+              ),
+          const SizedBox(height: 12),
+          if (b > 0) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(
+                value: used.clamp(0.0, 1.0),
+                minHeight: 10,
+                backgroundColor: UColors.bgMid,
+                color: used >= 1
+                    ? UColors.danger
+                    : (used >= .8 ? UColors.accent : UColors.lilac),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+                used >= 1
+                    ? '⚠️ Budget di $monthName superato di ${eur(total - b)}'
+                    : 'Budget di $monthName: ${eur(total)} di ${eur(b)} · restano ${eur(b - total)}',
+                style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: used >= 1 ? UColors.danger : UColors.ink)),
+          ],
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => setBudget(context, widget.repo, b),
+              icon: const Icon(Icons.savings_outlined, size: 18),
+              label: Text(b > 0 ? 'Cambia budget' : 'Imposta un budget mensile'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 Future<void> showExpenseSheet(
         BuildContext context, Repo repo, List<Item> members,
-        {Item? item}) =>
+        {Item? item, List<Item> all = const [], double budget = 0}) =>
     showUSheet(
-        context, _ExpenseForm(repo: repo, members: members, item: item));
+        context,
+        _ExpenseForm(
+            repo: repo,
+            members: members,
+            item: item,
+            all: all,
+            budget: budget));
 
 class _ExpenseForm extends StatefulWidget {
-  const _ExpenseForm({required this.repo, required this.members, this.item});
+  const _ExpenseForm(
+      {required this.repo,
+      required this.members,
+      this.item,
+      this.all = const [],
+      this.budget = 0});
   final Repo repo;
   final List<Item> members;
   final Item? item;
+  final List<Item> all;
+  final double budget;
 
   @override
   State<_ExpenseForm> createState() => _ExpenseFormState();
@@ -458,6 +764,9 @@ class _ExpenseFormState extends State<_ExpenseForm> {
   late DateTime _date = widget.item?.date('date') ?? DateTime.now();
   late String _icon = widget.item?.str('icon', '🛒') ?? '🛒';
   final _back = TextEditingController();
+  late String _repeat = widget.item?.str('repeat') ?? '';
+  late String? _photo =
+      (widget.item?.str('photoId') ?? '').isEmpty ? null : widget.item!.str('photoId');
 
   /// Percentuale pagata dal partner (0 = tutto io, 100 = tutto lui).
   late double _paidP = _initPct(paidOf);
@@ -514,9 +823,19 @@ class _ExpenseFormState extends State<_ExpenseForm> {
       'icon': _icon,
       'date': Timestamp.fromDate(_date),
       'kind': widget.item?.str('kind', 'expense') ?? 'expense',
+      'repeat': _repeat,
+      'next': _repeat.isEmpty
+          ? null
+          : (widget.item != null &&
+                  widget.item!.str('repeat') == _repeat &&
+                  widget.item!.date('next') != null
+              ? widget.item!.data['next']
+              : Timestamp.fromDate(firstRepeatAfterToday(_date, _repeat))),
+      'photoId': _photo,
     };
     if (widget.item == null) {
       widget.repo.add('expenses', data);
+      _budgetCheck(a);
       Feed.log(widget.repo,
           icon: _icon,
           text: 'ha segnato una spesa: $title (${eur(a)})',
@@ -534,6 +853,32 @@ class _ExpenseFormState extends State<_ExpenseForm> {
       widget.repo.update('expenses', widget.item!.id, data);
     }
     Navigator.pop(context);
+  }
+
+  /// Avvisa quando la spesa fa superare l'80% o il 100% del budget.
+  void _budgetCheck(double added) {
+    final b = widget.budget;
+    final now = DateTime.now();
+    if (b <= 0 || _date.year != now.year || _date.month != now.month) return;
+    final before = monthTotal(widget.all, now.year, now.month);
+    final after = before + added;
+    final m = DateFormat('MMMM', 'it_IT').format(now);
+    String? msg;
+    if (before < b && after >= b) {
+      msg = 'il budget di $m è finito';
+    } else if (before < b * .8 && after >= b * .8) {
+      msg = 'siete all\'${(after / b * 100).round()}% del budget di $m';
+    }
+    if (msg == null) return;
+    ScaffoldMessenger.maybeOf(context)
+        ?.showSnackBar(SnackBar(content: Text('⚠️ ${capitalize(msg)}')));
+    Feed.log(widget.repo,
+        icon: '⚠️',
+        text: 'ha segnato una spesa: $msg',
+        textMe: 'Con questa spesa $msg',
+        pushTitle: '⚠️ ${capitalize(msg)}',
+        body: '${eur(after)} spesi su ${eur(b)}',
+        tag: 'budget');
   }
 
   @override
@@ -666,6 +1011,31 @@ class _ExpenseFormState extends State<_ExpenseForm> {
                 hint: 'Es. 20'),
           ),
         ],
+        const SizedBox(height: 14),
+        const Text('Si ripete', style: TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 6),
+        Wrap(spacing: 8, runSpacing: 4, children: [
+          for (final e in expenseRepeatLabels.entries)
+            ChoiceChip(
+              label: Text(e.value),
+              selected: _repeat == e.key,
+              onSelected: (_) => setState(() => _repeat = e.key),
+            ),
+        ]),
+        if (_repeat.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+                'Si aggiunge da sola il ${fmtDay(firstRepeatAfterToday(_date, _repeat))} e poi ${expenseRepeatLabels[_repeat]!.toLowerCase()}, con una notifica quel giorno.',
+                style: TextStyle(color: UColors.muted, fontSize: 12.5)),
+          ),
+        const SizedBox(height: 12),
+        AttachmentField(
+          repo: widget.repo,
+          id: _photo,
+          label: 'Allega lo scontrino',
+          onChanged: (v) => setState(() => _photo = v),
+        ),
         const SizedBox(height: 12),
         Align(
           alignment: Alignment.centerLeft,

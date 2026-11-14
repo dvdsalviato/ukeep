@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../data/repo.dart';
 import 'theme.dart';
 import 'ui.dart';
+import 'shop.dart';
 import 'undo.dart';
 
 /// Voci di una lista / passi di un progetto.
@@ -34,12 +35,30 @@ class SubItems {
 
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
 
-  Future<void> add(String text) => ref.add({
+  Future<void> add(String text, {int q = 1, String? cat}) => ref.add({
         't': text,
         'd': false,
         'o': DateTime.now().millisecondsSinceEpoch,
         'by': _uid,
+        if (q != 1) 'q': q,
+        if (cat != null) 'cat': cat,
       });
+
+  Future<void> setQty(Item i, int q) =>
+      ref.doc(i.id).update({'q': q < 1 ? 1 : q});
+
+  Future<void> setCat(Item i, String cat) =>
+      ref.doc(i.id).update({'cat': cat});
+
+  /// Ricorda quante volte avete comprato una cosa (per i suggerimenti).
+  Future<void> countFreq(String name) {
+    final k = freqKey(name);
+    if (k.isEmpty) return Future.value();
+    return repo.col(parent).doc(parentId).update({
+      'freq.$k.n': FieldValue.increment(1),
+      'freq.$k.t': name,
+    });
+  }
 
   Future<void> toggle(Item i) {
     final done = !i.flag('d');
@@ -141,7 +160,7 @@ String _first(List<Item> members, String? uid) {
 }
 
 /// Riga per aggiungere + elenco con spunta, scorrimento, pressione lunga
-/// e "fatto da".
+/// e "fatto da". In modalità spesa: quantità, reparti e suggerimenti.
 class SubItemsPanel extends StatefulWidget {
   const SubItemsPanel({
     super.key,
@@ -153,6 +172,8 @@ class SubItemsPanel extends StatefulWidget {
     required this.emptyIcon,
     required this.emptyText,
     this.round = true,
+    this.shop = false,
+    this.big = false,
     this.onAdded,
   });
   final SubItems items;
@@ -163,6 +184,8 @@ class SubItemsPanel extends StatefulWidget {
   final IconData emptyIcon;
   final String emptyText;
   final bool round;
+  final bool shop;
+  final bool big;
   final void Function(String text)? onAdded;
 
   @override
@@ -187,20 +210,171 @@ class _SubItemsPanelState extends State<SubItemsPanel> {
     super.dispose();
   }
 
-  void _add(List<Item> current) {
-    final t = _input.text.trim();
-    if (t.isEmpty) return;
-    _input.clear();
-    // niente doppioni: se c'è già (non fatta) non la riaggiungo
-    final dup = current.any(
-        (i) => !i.flag('d') && i.str('t').toLowerCase() == t.toLowerCase());
-    if (dup) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('"$t" c\'è già')));
-      return;
+  int _q(Item i) => ((i.data['q'] as num?) ?? 1).toInt();
+
+  void _add(List<Item> current, [String? raw]) {
+    final text = (raw ?? _input.text).trim();
+    if (text.isEmpty) return;
+    if (raw == null) _input.clear();
+    var q = 1;
+    var t = text;
+    if (widget.shop) {
+      final r = parseQty(text);
+      q = r.$1;
+      t = r.$2;
     }
-    widget.items.add(t);
-    widget.onAdded?.call(t);
+    // niente doppioni: se c'è già (non fatta) aumento la quantità
+    for (final i in current) {
+      if (!i.flag('d') && i.str('t').toLowerCase() == t.toLowerCase()) {
+        if (widget.shop) {
+          widget.items.setQty(i, _q(i) + q);
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('"$t" c\'era già: ora ×${_q(i) + q}')));
+        } else {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('"$t" c\'è già')));
+        }
+        return;
+      }
+    }
+    if (widget.shop) {
+      widget.items.add(t, q: q, cat: guessDept(t).key);
+      widget.items.countFreq(t);
+    } else {
+      widget.items.add(t);
+    }
+    widget.onAdded?.call(q > 1 ? '$t ×$q' : t);
+  }
+
+  List<String> _suggestions(List<Item> all) {
+    final f = widget.parentItem.data['freq'];
+    if (f is! Map) return [];
+    final open = all
+        .where((i) => !i.flag('d'))
+        .map((i) => i.str('t').toLowerCase())
+        .toSet();
+    final list = <MapEntry<String, int>>[];
+    f.forEach((k, v) {
+      if (v is Map) {
+        final t = '${v['t'] ?? ''}';
+        final n = ((v['n'] as num?) ?? 0).toInt();
+        if (t.isNotEmpty && !open.contains(t.toLowerCase())) {
+          list.add(MapEntry(t, n));
+        }
+      }
+    });
+    list.sort((a, b) => b.value.compareTo(a.value));
+    return list.take(10).map((e) => e.key).toList();
+  }
+
+  Future<void> _pickDept(Item it) async {
+    final key = await showUSheet<String>(
+      context,
+      Builder(
+        builder: (ctx) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Reparto di "${it.str('t')}"', style: serif(24)),
+            const SizedBox(height: 8),
+            for (final d in [...depts, otherDept])
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Text(d.icon, style: const TextStyle(fontSize: 22)),
+                title: Text(d.name),
+                trailing: it.str('cat') == d.key
+                    ? Icon(Icons.check, color: UColors.accent)
+                    : null,
+                onTap: () => Navigator.pop(ctx, d.key),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (key != null) widget.items.setCat(it, key);
+  }
+
+  Widget _row(Item it, String? me) {
+    final big = widget.big;
+    final done = it.flag('d');
+    final q = _q(it);
+    return Dismissible(
+      key: ValueKey(it.id),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 12),
+        child: Icon(Icons.delete_outline, color: UColors.danger),
+      ),
+      onDismissed: (_) => deleteDocWithUndo(
+          context, widget.items.ref.doc(it.id), it.data,
+          label: it.str('t')),
+      child: GestureDetector(
+        onLongPress: () => itemMenu(context,
+            title: it.str('t'),
+            editLabel: 'Rinomina',
+            onOpen: widget.shop ? () => _pickDept(it) : null,
+            openLabel: 'Cambia reparto',
+            onEdit: () async {
+              final t = await askText(context, 'Rinomina', it.str('t'));
+              if (t == null || t.isEmpty) return;
+              widget.items.rename(it, t);
+            },
+            onDelete: () => deleteDocWithUndo(
+                context, widget.items.ref.doc(it.id), it.data,
+                label: it.str('t'))),
+        child: CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          activeColor: UColors.accent,
+          visualDensity: big ? VisualDensity.comfortable : null,
+          shape: widget.round ? const CircleBorder() : null,
+          value: done,
+          onChanged: (_) => widget.items.toggle(it),
+          title: Text(
+            q > 1 ? '${it.str('t')}  ×$q' : it.str('t'),
+            style: TextStyle(
+              fontSize: big ? 22 : 16.5,
+              fontWeight: big ? FontWeight.w600 : null,
+              decoration: done ? TextDecoration.lineThrough : null,
+              color: done ? UColors.muted : UColors.ink,
+            ),
+          ),
+          secondary: widget.shop && !done && !big
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      icon: Icon(Icons.remove_circle_outline,
+                          size: 20, color: UColors.muted),
+                      onPressed:
+                          q > 1 ? () => widget.items.setQty(it, q - 1) : null,
+                    ),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      icon: Icon(Icons.add_circle_outline,
+                          size: 20, color: UColors.muted),
+                      onPressed: () => widget.items.setQty(it, q + 1),
+                    ),
+                  ],
+                )
+              : null,
+          subtitle: big
+              ? null
+              : Builder(builder: (_) {
+                  final who = done ? it.str('doneBy') : it.str('by');
+                  if (who.isEmpty) return const SizedBox.shrink();
+                  final name =
+                      who == me ? 'te' : _first(widget.members, who);
+                  if (name.isEmpty) return const SizedBox.shrink();
+                  return Text(
+                      done ? 'Fatto da $name' : 'Aggiunto da $name',
+                      style: TextStyle(color: UColors.muted, fontSize: 12));
+                }),
+        ),
+      ),
+    );
   }
 
   @override
@@ -213,7 +387,22 @@ class _SubItemsPanelState extends State<SubItemsPanel> {
         final all = snap.data ?? const <Item>[];
         final open = all.where((i) => !i.flag('d')).toList();
         final done = all.where((i) => i.flag('d')).toList();
-        final ordered = [...open, ...done];
+        final sugg = widget.shop && !widget.big ? _suggestions(all) : <String>[];
+
+        // gruppi per reparto (solo spesa)
+        final groups = <Dept, List<Item>>{};
+        if (widget.shop) {
+          for (final d in [...depts, otherDept]) {
+            final g = open
+                .where((i) => (i.str('cat').isEmpty
+                        ? guessDept(i.str('t')).key
+                        : i.str('cat')) ==
+                    d.key)
+                .toList();
+            if (g.isNotEmpty) groups[d] = g;
+          }
+        }
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -227,7 +416,10 @@ class _SubItemsPanelState extends State<SubItemsPanel> {
                       textCapitalization: TextCapitalization.sentences,
                       onSubmitted: (_) => _add(all),
                       decoration: InputDecoration(
-                          hintText: widget.hint, border: InputBorder.none),
+                          hintText: widget.shop
+                              ? 'Aggiungi… (es. 2 latte)'
+                              : widget.hint,
+                          border: InputBorder.none),
                     ),
                   ),
                   IconButton.filled(
@@ -240,78 +432,73 @@ class _SubItemsPanelState extends State<SubItemsPanel> {
                 ],
               ),
             ),
+            if (sugg.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 40,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    for (final t in sugg)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ActionChip(
+                          avatar: const Icon(Icons.add, size: 16),
+                          label: Text(t),
+                          backgroundColor: UColors.card,
+                          side: BorderSide.none,
+                          shape: const StadiumBorder(),
+                          onPressed: () => _add(all, t),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 14),
             if (all.isEmpty)
               EmptyHint(widget.emptyIcon, widget.emptyText)
-            else
+            else if (widget.shop) ...[
+              for (final g in groups.entries) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+                  child: Text('${g.key.icon}  ${g.key.name}',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: widget.big ? 18 : 14,
+                          color: UColors.muted)),
+                ),
+                UCard(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  child: Column(
+                      children: [for (final it in g.value) _row(it, me)]),
+                ),
+                const SizedBox(height: 10),
+              ],
+              if (done.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+                  child: Text('🛒  Nel carrello',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: widget.big ? 18 : 14,
+                          color: UColors.muted)),
+                ),
+                UCard(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  child: Column(
+                      children: [for (final it in done) _row(it, me)]),
+                ),
+              ],
+            ] else
               UCard(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 child: Column(
                   children: [
-                    for (final it in ordered)
-                      Dismissible(
-                        key: ValueKey(it.id),
-                        direction: DismissDirection.endToStart,
-                        background: Container(
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 12),
-                          child: Icon(Icons.delete_outline,
-                              color: UColors.danger),
-                        ),
-                        onDismissed: (_) => deleteDocWithUndo(context,
-                            widget.items.ref.doc(it.id), it.data,
-                            label: it.str('t')),
-                        child: GestureDetector(
-                          onLongPress: () => itemMenu(context,
-                              title: it.str('t'),
-                              editLabel: 'Rinomina',
-                              onEdit: () async {
-                                final t = await askText(
-                                    context, 'Rinomina', it.str('t'));
-                                if (t == null || t.isEmpty) return;
-                                widget.items.rename(it, t);
-                              },
-                              onDelete: () => deleteDocWithUndo(context,
-                                  widget.items.ref.doc(it.id), it.data,
-                                  label: it.str('t'))),
-                          child: CheckboxListTile(
-                            contentPadding: EdgeInsets.zero,
-                            controlAffinity: ListTileControlAffinity.leading,
-                            activeColor: UColors.accent,
-                            shape: widget.round ? const CircleBorder() : null,
-                            value: it.flag('d'),
-                            onChanged: (_) => widget.items.toggle(it),
-                            title: Text(
-                              it.str('t'),
-                              style: TextStyle(
-                                fontSize: 16.5,
-                                decoration: it.flag('d')
-                                    ? TextDecoration.lineThrough
-                                    : null,
-                                color:
-                                    it.flag('d') ? UColors.muted : UColors.ink,
-                              ),
-                            ),
-                            subtitle: Builder(builder: (_) {
-                              final who = it.flag('d')
-                                  ? it.str('doneBy')
-                                  : it.str('by');
-                              if (who.isEmpty) return const SizedBox.shrink();
-                              final name = who == me
-                                  ? 'te'
-                                  : _first(widget.members, who);
-                              if (name.isEmpty) return const SizedBox.shrink();
-                              return Text(
-                                  it.flag('d')
-                                      ? 'Fatto da $name'
-                                      : 'Aggiunto da $name',
-                                  style: TextStyle(
-                                      color: UColors.muted, fontSize: 12));
-                            }),
-                          ),
-                        ),
-                      ),
+                    for (final it in [...open, ...done]) _row(it, me),
                   ],
                 ),
               ),
@@ -324,7 +511,9 @@ class _SubItemsPanelState extends State<SubItemsPanel> {
                         style: TextStyle(color: UColors.muted)),
                     TextButton(
                       onPressed: () => widget.items.clearDone(all),
-                      child: const Text('Rimuovi i completati'),
+                      child: Text(widget.shop
+                          ? 'Svuota il carrello'
+                          : 'Rimuovi i completati'),
                     ),
                   ],
                 ),

@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/attach.dart';
 import '../../core/feed.dart';
 import '../../core/push.dart';
 import '../../core/theme.dart';
@@ -53,41 +54,43 @@ DateTime nextRepeat(DateTime from, String r) {
 
 /// Spunta un'attività. Se si ripete: salva lo storico e sposta la scadenza
 /// alla prossima volta.
-void toggleTask(Repo repo, Item t) {
+Future<void> toggleTask(Repo repo, Item t) async {
   final uid = FirebaseAuth.instance.currentUser?.uid;
   final done = !t.flag('done');
   final r = t.str('repeat');
   if (done && r.isNotEmpty) {
-    repo.add('tasks', {
-      'title': t.str('title'),
-      'note': t.str('note'),
-      'assignee': t.data['assignee'],
-      'due': t.data['due'],
-      'time': t.str('time'),
-      'done': true,
-      'doneAt': Timestamp.now(),
-      'doneBy': uid,
-      'fromRepeat': t.id,
-    });
     final today = dayOnly(DateTime.now());
     var next = nextRepeat(t.date('due') ?? today, r);
     while (!next.isAfter(today)) {
       next = nextRepeat(next, r);
     }
-    repo.update('tasks', t.id, {'due': Timestamp.fromDate(next)});
     Feed.log(repo,
         icon: '🎉', text: 'ha completato "${t.str('title')}"', tag: 'done');
+    await Future.wait([
+      repo.add('tasks', {
+        'title': t.str('title'),
+        'note': t.str('note'),
+        'assignee': t.data['assignee'],
+        'due': t.data['due'],
+        'time': t.str('time'),
+        'done': true,
+        'doneAt': Timestamp.now(),
+        'doneBy': uid,
+        'fromRepeat': t.id,
+      }),
+      repo.update('tasks', t.id, {'due': Timestamp.fromDate(next)}),
+    ]);
     return;
   }
-  repo.update('tasks', t.id, {
-    'done': done,
-    'doneAt': done ? Timestamp.now() : null,
-    'doneBy': done ? uid : null,
-  });
   if (done) {
     Feed.log(repo,
         icon: '🎉', text: 'ha completato "${t.str('title')}"', tag: 'done');
   }
+  await repo.update('tasks', t.id, {
+    'done': done,
+    'doneAt': done ? Timestamp.now() : null,
+    'doneBy': done ? uid : null,
+  });
 }
 
 /// Scaduta: con orario dopo quell'ora, senza orario dal giorno dopo.
@@ -184,7 +187,9 @@ class TaskRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    task.str('title'),
+                    task.str('photoId').isEmpty
+                        ? task.str('title')
+                        : '${task.str('title')} 📎',
                     style: TextStyle(
                       fontSize: 16.5,
                       decoration: done ? TextDecoration.lineThrough : null,
@@ -421,6 +426,7 @@ class _TaskFormState extends State<_TaskForm> {
   String _time = '';
   String _repeat = '';
   String? _assignee;
+  String? _photo;
 
   @override
   void initState() {
@@ -428,6 +434,8 @@ class _TaskFormState extends State<_TaskForm> {
     _due = widget.item?.date('due');
     _time = widget.item?.str('time') ?? '';
     _repeat = widget.item?.str('repeat') ?? '';
+    final ph = widget.item?.str('photoId') ?? '';
+    _photo = ph.isEmpty ? null : ph;
     _assignee = widget.item?.data['assignee'] as String?;
   }
 
@@ -477,6 +485,7 @@ class _TaskFormState extends State<_TaskForm> {
       'time': _due == null ? '' : _time,
       'assignee': _assignee,
       'repeat': _repeat,
+      'photoId': _photo,
     };
     if (widget.item == null) {
       widget.repo.add('tasks', {...data, 'done': false});
@@ -523,6 +532,13 @@ class _TaskFormState extends State<_TaskForm> {
           controller: _note,
           textCapitalization: TextCapitalization.sentences,
           decoration: fieldDeco('Nota (facoltativa)'),
+        ),
+        const SizedBox(height: 12),
+        AttachmentField(
+          repo: widget.repo,
+          id: _photo,
+          label: 'Allega una foto',
+          onChanged: (v) => setState(() => _photo = v),
         ),
         const SizedBox(height: 16),
         const Text('Quando', style: TextStyle(fontWeight: FontWeight.w700)),

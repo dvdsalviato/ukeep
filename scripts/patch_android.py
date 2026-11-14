@@ -66,6 +66,16 @@ if "android.intent.action.VIEW" not in m:
     mp.write_text(m)
     print("AndroidManifest: apertura link configurata")
 
+# --- local_auth (impronta) richiede FlutterFragmentActivity
+for kt in pathlib.Path("android/app/src/main/kotlin").rglob("MainActivity.kt"):
+    k = kt.read_text()
+    if "FlutterFragmentActivity" not in k:
+        k = k.replace("io.flutter.embedding.android.FlutterActivity",
+                      "io.flutter.embedding.android.FlutterFragmentActivity")
+        k = k.replace(": FlutterActivity()", ": FlutterFragmentActivity()")
+        kt.write_text(k)
+        print("MainActivity: FlutterFragmentActivity")
+
 # --- Gradle: core library desugaring (richiesto da flutter_local_notifications)
 gp = pathlib.Path("android/app/build.gradle.kts")
 g = gp.read_text()

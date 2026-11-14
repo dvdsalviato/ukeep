@@ -5,6 +5,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'app.dart';
+import 'core/app_lock.dart';
 import 'core/theme.dart';
 import 'core/update.dart';
 
@@ -15,5 +16,6 @@ Future<void> main() async {
   await GoogleSignIn.instance.initialize();
   await ThemeCtl.load();
   await AppVersion.load();
+  await LockCtl.load();
   runApp(const ProviderScope(child: UkeepApp()));
 }

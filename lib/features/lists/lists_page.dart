@@ -38,7 +38,13 @@ class ListsHub extends ConsumerWidget {
           } else if (seg == 3) {
             label = 'Nuova spesa';
             final members = ref.read(membersProvider).value ?? [];
-            add = () => showExpenseSheet(context, repo, members);
+            final all = ref.read(expensesProvider).value ?? [];
+            final budget = ((ref.read(coupleDocProvider).value?['budget']
+                        as num?) ??
+                    0)
+                .toDouble();
+            add = () => showExpenseSheet(context, repo, members,
+                all: all, budget: budget);
           } else {
             label = 'Nuovo sondaggio';
             add = () => showPollSheet(context, repo);
@@ -311,6 +317,9 @@ class _ListFormState extends State<_ListForm> {
   late String _icon = widget.item?.str('icon', '🛒') ?? '🛒';
   late bool _secret = widget.item?.flag('locked') ?? false;
   String? _newPin;
+  late bool _shop =
+      widget.item == null ? true : isShopList(widget.item!);
+  bool _shopTouched = false;
 
   @override
   void dispose() {
@@ -326,11 +335,13 @@ class _ListFormState extends State<_ListForm> {
       if (_secret && _newPin != null) ...secretFields(_newPin),
       if (!_secret && wasSecret) ...secretFields(null),
     };
+    final shop = _shopTouched ? _shop : (_icon == '🛒' || _shop && widget.item != null);
     if (widget.item == null) {
-      widget.repo.add('lists', {'name': name, 'icon': _icon, ...sec});
+      widget.repo.add(
+          'lists', {'name': name, 'icon': _icon, 'shop': shop, ...sec});
     } else {
-      widget.repo.update(
-          'lists', widget.item!.id, {'name': name, 'icon': _icon, ...sec});
+      widget.repo.update('lists', widget.item!.id,
+          {'name': name, 'icon': _icon, 'shop': shop, ...sec});
     }
     Navigator.pop(context);
   }
@@ -377,7 +388,19 @@ class _ListFormState extends State<_ListForm> {
               ),
           ],
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 8),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: _shopTouched ? _shop : (_icon == '🛒' || (widget.item != null && _shop)),
+          activeThumbColor: UColors.dark,
+          title: const Text('🛒 Lista della spesa'),
+          subtitle: const Text('Reparti, quantità (es. "2 latte") e suggerimenti'),
+          onChanged: (v) => setState(() {
+            _shop = v;
+            _shopTouched = true;
+          }),
+        ),
+        const SizedBox(height: 8),
         SecretSwitch(
           value: _secret,
           what: 'Lista',
@@ -394,12 +417,25 @@ class _ListFormState extends State<_ListForm> {
   }
 }
 
-class ListDetailPage extends ConsumerWidget {
+bool isShopList(Item l) => l.data['shop'] is bool
+    ? l.flag('shop')
+    : (l.str('icon') == '🛒' || l.str('name').toLowerCase().contains('spesa'));
+
+class ListDetailPage extends ConsumerStatefulWidget {
   const ListDetailPage({super.key, required this.listId});
   final String listId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ListDetailPage> createState() => _ListDetailPageState();
+}
+
+class _ListDetailPageState extends ConsumerState<ListDetailPage> {
+  bool _big = false;
+
+  String get listId => widget.listId;
+
+  @override
+  Widget build(BuildContext context) {
     final repo = ref.watch(repoProvider);
     final lists = ref.watch(listsProvider).value ?? [];
     final members = ref.watch(membersProvider).value ?? [];
@@ -412,11 +448,18 @@ class ListDetailPage extends ConsumerWidget {
     }
     final Item list = found;
     final subs = SubItems(repo, 'lists', list.id, 'items');
+    final shop = isShopList(list);
 
     return Scaffold(
       appBar: AppBar(
         title: Text('${list.str('icon', '📝')}  ${list.str('name')}'),
         actions: [
+          if (shop)
+            IconButton(
+              tooltip: _big ? 'Vista normale' : 'Modalità supermercato',
+              onPressed: () => setState(() => _big = !_big),
+              icon: Icon(_big ? Icons.zoom_in_map : Icons.storefront_outlined),
+            ),
           PopupMenuButton<String>(
             onSelected: (v) async {
               if (v == 'rename') {
@@ -437,11 +480,20 @@ class ListDetailPage extends ConsumerWidget {
       body: ListView(
         padding: EdgeInsets.fromLTRB(16, 8, 16, 40 + bottomInset(context)),
         children: [
+          if (_big)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text('🛒 Modalità supermercato: tocca per mettere nel carrello',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: UColors.muted)),
+            ),
           SubItemsPanel(
             items: subs,
             parentItem: list,
             legacyField: 'items',
             members: members,
+            shop: shop,
+            big: _big,
             hint: 'Aggiungi un elemento…',
             emptyIcon: Icons.playlist_add,
             emptyText: 'La lista è vuota. Scrivi qui sopra il primo elemento.',

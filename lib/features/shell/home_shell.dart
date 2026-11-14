@@ -13,6 +13,7 @@ import '../../core/theme.dart';
 import '../../core/ui.dart';
 import '../../data/providers.dart';
 import '../calendar/calendar_page.dart';
+import '../expenses/expenses_page.dart';
 import '../home/home_page.dart';
 import '../lists/lists_page.dart';
 import '../tasks/tasks_page.dart';
@@ -34,7 +35,9 @@ class _HomeShellState extends ConsumerState<HomeShell>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    NotifService.instance.setCouple(widget.coupleId);
     NotifService.instance.init().then((_) {
+      _recurring();
       _syncNotifs();
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid != null) Push.instance.init(uid);
@@ -46,6 +49,14 @@ class _HomeShellState extends ConsumerState<HomeShell>
   }
 
   bool _moodAsked = false;
+
+  void _recurring() {
+    final ex = ref.read(expensesProvider).value;
+    final repo = ref.read(repoProvider);
+    if (ex == null) return;
+    NotifService.instance.setExpenses(ex);
+    if (repo != null) processRecurringExpenses(repo, ex);
+  }
 
   void _checkMood() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -103,6 +114,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
       _syncNotifs();
       _syncWidget();
       _checkMood();
+      _recurring();
     }
   }
 
@@ -171,6 +183,13 @@ class _HomeShellState extends ConsumerState<HomeShell>
       if (!_moodAsked) _checkMood();
     });
     ref.listen(eventsProvider, (prev, next) => _syncWidget());
+    ref.listen(expensesProvider, (prev, next) {
+      final ex = next.value;
+      if (ex == null) return;
+      NotifService.instance.setExpenses(ex);
+      final repo = ref.read(repoProvider);
+      if (repo != null) processRecurringExpenses(repo, ex);
+    });
     ref.listen(coupleDocProvider, (prev, next) => _syncWidget());
     final pages = <Widget>[
       HomePage(onGoTo: _go),

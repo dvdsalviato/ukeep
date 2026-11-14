@@ -306,7 +306,7 @@ Future<void> widgetBackgroundCallback(Uri? uri) async {
         final items = snap.docs.map((d) => Item(d.id, d.data())).toList()
           ..sort((a, b) => ((a.data['o'] as num?) ?? 0)
               .compareTo((b.data['o'] as num?) ?? 0));
-        _lastItems = '';
+        WidgetSync._lastItems = '';
         await WidgetSync.updateListItems(id, title, items);
         break;
       case 'hug':

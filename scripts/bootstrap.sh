@@ -22,7 +22,7 @@ flutter pub add flutter_local_notifications:^19.5.0 timezone:^0.10.0
 flutter pub add firebase_messaging googleapis_auth home_widget
 flutter pub add package_info_plus url_launcher http
 flutter pub add local_auth:^2.3.0
-flutter pub add permission_handler
+flutter pub add permission_handler:^11.4.0
 flutter pub add --dev flutter_launcher_icons
 
 python3 scripts/patch_pubspec.py

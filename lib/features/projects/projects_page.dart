@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/secret.dart';
+import '../../core/feed.dart';
 import '../../core/sub_items.dart';
 import '../../core/theme.dart';
 import '../../core/ui.dart';
@@ -235,6 +236,10 @@ class _ProjectFormState extends State<_ProjectForm> {
     };
     if (widget.item == null) {
       widget.repo.add('projects', {...data, 'status': 'active'});
+      if (!_secret) {
+        Feed.log(widget.repo,
+            icon: _icon, text: 'ha creato il progetto "$title"', tag: 'projects');
+      }
     } else {
       widget.repo.update('projects', widget.item!.id, data);
     }
@@ -401,6 +406,12 @@ class ProjectDetailPage extends ConsumerWidget {
             emptyIcon: Icons.route_outlined,
             emptyText:
                 'Spezzate il progetto in piccoli passi: li spunterete uno a uno.',
+            onAdded: isLocked(p)
+                ? null
+                : (t) => Feed.log(repo,
+                    icon: p.str('icon', '🎯'),
+                    text: 'ha aggiunto il passo "$t" a ${p.str('title')}',
+                    tag: 'project-${p.id}'),
           ),
           const SizedBox(height: 20),
           OutlinedButton.icon(

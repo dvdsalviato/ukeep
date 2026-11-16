@@ -242,6 +242,8 @@ class _WishFormState extends State<_WishForm> {
         'owner': FirebaseAuth.instance.currentUser?.uid,
         'gifted': false,
       });
+      Feed.log(widget.repo,
+          icon: '⭐', text: 'ha aggiunto un desiderio: $title', tag: 'wishes');
     } else {
       widget.repo.update('wishes', widget.item!.id, data);
     }

@@ -438,6 +438,10 @@ class _ListFormState extends State<_ListForm> {
     if (widget.item == null) {
       widget.repo.add(
           'lists', {'name': name, 'icon': _icon, 'shop': shop, ...sec});
+      if (!_secret) {
+        Feed.log(widget.repo,
+            icon: _icon, text: 'ha creato la lista "$name"', tag: 'lists');
+      }
     } else {
       widget.repo.update('lists', widget.item!.id,
           {'name': name, 'icon': _icon, 'shop': shop, ...sec});

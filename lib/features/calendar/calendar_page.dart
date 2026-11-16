@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/secret.dart';
+import '../../core/feed.dart';
 import '../../core/theme.dart';
 import '../../core/ui.dart';
 import '../../core/undo.dart';
@@ -533,6 +534,10 @@ class _EventFormState extends State<_EventForm> {
     };
     if (widget.item == null) {
       widget.repo.add('events', data);
+      Feed.log(widget.repo,
+          icon: '📅',
+          text: 'ha aggiunto in calendario: $title (${fmtDay(_date)}${_time.isEmpty ? '' : ' ${_time}'})',
+          tag: 'events');
     } else {
       widget.repo.update('events', widget.item!.id, data);
     }

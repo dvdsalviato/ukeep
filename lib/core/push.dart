@@ -34,6 +34,37 @@ class Push {
 
   bool get configured => _sa != null;
 
+  /// Perché l'ultima notifica al partner non è partita (per la prova).
+  String lastError = '';
+
+  /// Manda una notifica di prova e spiega com'è andata.
+  Future<String> testPartner() async {
+    final ok = await toPartner(
+        title: '🔔 Prova da $myName',
+        body: 'Se la vedi, le notifiche tra voi funzionano',
+        tag: 'test');
+    if (ok) {
+      return 'Partita! Se $partnerName non la riceve con l\'app chiusa, '
+          'sul suo telefono va tolto il risparmio batteria per Ukeep.';
+    }
+    switch (lastError) {
+      case 'no_partner':
+        return 'Il partner non è ancora entrato nel vostro spazio.';
+      case 'off':
+        return '$partnerName ha spento gli avvisi dal partner.';
+      case 'no_token':
+        return '$partnerName deve aprire Ukeep (versione nuova) almeno una volta.';
+      case 'no_key':
+        return 'Manca la chiave per le notifiche nella build (secret FCM_SA_B64).';
+      case 'unregistered':
+        return 'Il telefono di $partnerName va riaperto: deve aprire Ukeep una volta.';
+      case 'forbidden':
+        return 'Google rifiuta l\'invio: controlla che l\'API "Firebase Cloud '
+            'Messaging" sia attiva e che la chiave abbia il ruolo giusto.';
+    }
+    return 'Non partita: $lastError';
+  }
+
   Item? get _me {
     for (final m in _members) {
       if (m.id == _uid) return m;
@@ -164,12 +195,25 @@ class Push {
       Map<String, String>? data}) async {
     try {
       final p = partner;
-      if (p == null || p.data['pushOff'] == true) return false;
+      if (p == null) {
+        lastError = 'no_partner';
+        return false;
+      }
+      if (p.data['pushOff'] == true) {
+        lastError = 'off';
+        return false;
+      }
       final token = p.str('fcmToken');
-      if (token.isEmpty) return false;
+      if (token.isEmpty) {
+        lastError = 'no_token';
+        return false;
+      }
       final client = await _auth();
       final sa = _sa;
-      if (client == null || sa == null) return false;
+      if (client == null || sa == null) {
+        lastError = 'no_key';
+        return false;
+      }
       final project = sa['project_id'] as String;
       final res = await client.post(
         Uri.parse(
@@ -194,10 +238,18 @@ class Push {
       );
       if (res.statusCode != 200) {
         debugPrint('Push ${res.statusCode}: ${res.body}');
+        lastError = res.body.contains('UNREGISTERED') || res.statusCode == 404
+            ? 'unregistered'
+            : (res.statusCode == 403
+                ? 'forbidden'
+                : 'errore ${res.statusCode}');
+      } else {
+        lastError = '';
       }
       return res.statusCode == 200;
     } catch (e) {
       debugPrint('Push: $e');
+      lastError = '$e';
       return false;
     }
   }

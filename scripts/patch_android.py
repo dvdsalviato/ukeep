@@ -32,6 +32,22 @@ if "ScheduledNotificationReceiver" not in m:
     mp.write_text(m)
     print("AndroidManifest: notifiche configurate")
 
+# --- Pulsanti "Fatto"/"Rimanda" sulle notifiche e permesso batteria
+m = mp.read_text()
+if "ActionBroadcastReceiver" not in m:
+    m = m.replace(
+        "</application>",
+        '        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver" />\n    </application>',
+        1,
+    )
+    m = m.replace(
+        "<application",
+        '<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>\n    <application',
+        1,
+    )
+    mp.write_text(m)
+    print("AndroidManifest: azioni notifiche e batteria")
+
 # --- Widget per la schermata Home e notifiche push (FCM)
 m = mp.read_text()
 if "UkeepWidget" not in m:

@@ -1,9 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
 
@@ -86,12 +88,28 @@ Future<void> handleNotifAction(NotificationResponse r) async {
   try {
     WidgetsFlutterBinding.ensureInitialized();
     if (Firebase.apps.isEmpty) await Firebase.initializeApp();
+    if (FirebaseAuth.instance.currentUser == null) {
+      await FirebaseAuth.instance
+          .authStateChanges()
+          .first
+          .timeout(const Duration(seconds: 8), onTimeout: () => null);
+    }
     final repo = Repo(parts[1]);
     final snap = await repo.col('tasks').doc(parts[2]).get();
     final data = snap.data();
     if (data == null) return;
     final t = Item(snap.id, data);
     final plugin = FlutterLocalNotificationsPlugin();
+    // per avvisare il partner anche quando l'app è chiusa
+    await Push.instance.initForWidget();
+    final nid = r.id;
+    if (nid != null) {
+      try {
+        await plugin.initialize(const InitializationSettings(
+            android: AndroidInitializationSettings('ic_stat')));
+        await plugin.cancel(nid);
+      } catch (_) {}
+    }
     if (action == 'done') {
       if (!t.flag('done')) await toggleTask(repo, t);
     } else if (action == 'snooze') {
@@ -168,9 +186,27 @@ class NotifService {
       await _partnerChannel();
     } catch (_) {}
     await requestPermission();
+    await askBattery();
   }
 
   void setCouple(String? coupleId) => _coupleId = coupleId;
+
+  /// Chiede di non "addormentare" Ukeep, così le notifiche arrivano anche
+  /// ad app chiusa (una volta sola, o quando lo chiedi tu).
+  Future<bool> askBattery({bool force = false}) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!force && (prefs.getBool('batteryAsked') ?? false)) {
+        return await Permission.ignoreBatteryOptimizations.isGranted;
+      }
+      await prefs.setBool('batteryAsked', true);
+      if (await Permission.ignoreBatteryOptimizations.isGranted) return true;
+      final s = await Permission.ignoreBatteryOptimizations.request();
+      return s.isGranted;
+    } catch (_) {
+      return false;
+    }
+  }
 
   void setExpenses(List<Item> expenses) {
     _expenses = expenses;
@@ -537,6 +573,36 @@ class _NotifSheet extends StatelessWidget {
               onChanged: (v) => Push.instance.setReceive(v),
             ),
           ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              ActionChip(
+                avatar: const Icon(Icons.send_outlined, size: 18),
+                label: const Text('Prova al partner'),
+                onPressed: () async {
+                  final m = ScaffoldMessenger.of(context);
+                  final msg = await Push.instance.testPartner();
+                  m.showSnackBar(SnackBar(
+                      duration: const Duration(seconds: 6),
+                      content: Text(msg)));
+                },
+              ),
+              ActionChip(
+                avatar: const Icon(Icons.battery_saver_outlined, size: 18),
+                label: const Text('Attive ad app chiusa'),
+                onPressed: () async {
+                  final m = ScaffoldMessenger.of(context);
+                  final ok = await NotifService.instance.askBattery(force: true);
+                  m.showSnackBar(SnackBar(
+                      content: Text(ok
+                          ? 'Ok: Ukeep può avvisarti anche ad app chiusa'
+                          : 'Se le notifiche arrivano in ritardo: Impostazioni › App › Ukeep › Batteria › Senza restrizioni')));
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
           if (s.enabled) ...[
             ListTile(
               contentPadding: EdgeInsets.zero,

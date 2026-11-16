@@ -11,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme.dart';
+import '../../core/feed.dart';
 import '../../core/ui.dart';
 import '../../core/undo.dart';
 import '../../data/providers.dart';
@@ -547,6 +548,8 @@ class _MemoryFormState extends State<_MemoryForm> {
       'date': Timestamp.fromDate(dayOnly(_date)),
       if (_photo != null) 'photoB64': base64Encode(_photo!),
     });
+    Feed.log(widget.repo,
+        icon: '📸', text: 'ha aggiunto un ricordo: $t', tag: 'memories');
     Navigator.pop(context);
   }
 

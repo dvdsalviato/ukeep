@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,6 +14,8 @@ class LockCtl {
   static final _auth = LocalAuthentication();
 
   static Future<void> load() async {
+    // impronta solo sul telefono, non nella webapp
+    if (kIsWeb) return;
     try {
       final p = await SharedPreferences.getInstance();
       enabled.value = p.getBool('appLock') ?? false;
@@ -20,6 +23,7 @@ class LockCtl {
   }
 
   static Future<bool> available() async {
+    if (kIsWeb) return false;
     try {
       return await _auth.isDeviceSupported();
     } catch (_) {

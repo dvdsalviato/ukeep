@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import 'couple_service.dart';
@@ -8,14 +9,22 @@ class AuthService {
   final _auth = FirebaseAuth.instance;
 
   Future<void> signInWithGoogle() async {
+    if (kIsWeb) {
+      // webapp: finestra di Google gestita da Firebase
+      await _auth.signInWithPopup(_webProvider());
+      return;
+    }
     final account = await GoogleSignIn.instance.authenticate();
     final idToken = account.authentication.idToken;
     final credential = GoogleAuthProvider.credential(idToken: idToken);
     await _auth.signInWithCredential(credential);
   }
 
+  GoogleAuthProvider _webProvider() =>
+      GoogleAuthProvider()..setCustomParameters({'prompt': 'select_account'});
+
   Future<void> signOut() async {
-    await GoogleSignIn.instance.signOut();
+    if (!kIsWeb) await GoogleSignIn.instance.signOut();
     await _auth.signOut();
   }
 
@@ -24,13 +33,17 @@ class AuthService {
   Future<void> deleteAccount(String? coupleId) async {
     final u = _auth.currentUser;
     if (u == null) return;
-    final account = await GoogleSignIn.instance.authenticate();
-    final cred =
-        GoogleAuthProvider.credential(idToken: account.authentication.idToken);
-    await u.reauthenticateWithCredential(cred);
+    if (kIsWeb) {
+      await u.reauthenticateWithPopup(_webProvider());
+    } else {
+      final account = await GoogleSignIn.instance.authenticate();
+      final cred = GoogleAuthProvider.credential(
+          idToken: account.authentication.idToken);
+      await u.reauthenticateWithCredential(cred);
+    }
     if (coupleId != null) await CoupleService().leaveCouple(u.uid, coupleId);
     await FirebaseFirestore.instance.collection('users').doc(u.uid).delete();
     await u.delete();
-    await GoogleSignIn.instance.signOut();
+    if (!kIsWeb) await GoogleSignIn.instance.signOut();
   }
 }

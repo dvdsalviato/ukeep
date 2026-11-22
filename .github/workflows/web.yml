@@ -1,0 +1,58 @@
+name: Webapp
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, webapp]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: webapp-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Genera progetto web e dipendenze
+        run: |
+          pip install --quiet pillow
+          bash scripts/bootstrap_web.sh
+
+      - name: Configurazione Firebase web
+        env:
+          FIREBASE_WEB_CONFIG: ${{ secrets.FIREBASE_WEB_CONFIG }}
+        run: python3 scripts/web_config.py
+
+      - name: Build webapp
+        run: |
+          rm -f assets/fcm_sa.json
+          flutter build web --release --base-href /ukeep/ \
+            --dart-define-from-file=web_defines.json
+
+      - uses: actions/upload-pages-artifact@v3
+        if: github.ref == 'refs/heads/main'
+        with:
+          path: build/web
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

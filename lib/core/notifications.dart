@@ -166,12 +166,16 @@ class NotifService {
 
   Future<void> init() async {
     if (_ready) return;
-    await _plugin.initialize(
-      const InitializationSettings(
-          android: AndroidInitializationSettings('ic_stat')),
-      onDidReceiveNotificationResponse: handleNotifAction,
-      onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
-    );
+    // sul web (webapp) non ci sono notifiche locali: si caricano solo le
+    // impostazioni, così il resto dell'app parte uguale
+    if (!kIsWeb) {
+      await _plugin.initialize(
+        const InitializationSettings(
+            android: AndroidInitializationSettings('ic_stat')),
+        onDidReceiveNotificationResponse: handleNotifAction,
+        onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
+      );
+    }
     final prefs = await SharedPreferences.getInstance();
     settings.value = NotifSettings(
       enabled: prefs.getBool('n_enabled') ?? true,
@@ -182,6 +186,7 @@ class NotifService {
       evening: prefs.getInt('n_evening') ?? 22 * 60,
     );
     _ready = true;
+    if (kIsWeb) return;
     try {
       await _partnerChannel();
     } catch (_) {}
@@ -194,6 +199,7 @@ class NotifService {
   /// Chiede di non "addormentare" Ukeep, così le notifiche arrivano anche
   /// ad app chiusa (una volta sola, o quando lo chiedi tu).
   Future<bool> askBattery({bool force = false}) async {
+    if (kIsWeb) return false;
     try {
       final prefs = await SharedPreferences.getInstance();
       if (!force && (prefs.getBool('batteryAsked') ?? false)) {
@@ -214,6 +220,7 @@ class NotifService {
   }
 
   Future<void> requestPermission() async {
+    if (kIsWeb) return;
     final android = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
     await android?.requestNotificationsPermission();
@@ -297,6 +304,7 @@ class NotifService {
   }
 
   Future<void> test() async {
+    if (kIsWeb) return;
     await _plugin.show(
         900000100,
         'Notifiche attive 🎉',
@@ -324,7 +332,7 @@ class NotifService {
 
   /// Mostra subito una notifica arrivata dal partner (app aperta).
   Future<void> showPartner(String title, String body) async {
-    if (!_ready) return;
+    if (!_ready || kIsWeb) return;
     await _plugin.show(
       DateTime.now().millisecondsSinceEpoch ~/ 1000 % 100000000,
       title,
@@ -357,7 +365,7 @@ class NotifService {
   Future<void> sync(List<Item> tasks, String? uid, {bool force = false}) async {
     _tasks = tasks;
     _uid = uid;
-    if (!_ready || uid == null) return;
+    if (!_ready || uid == null || kIsWeb) return;
     final s = settings.value;
     final mine = tasks.where((t) {
       if (t.flag('done')) return false;

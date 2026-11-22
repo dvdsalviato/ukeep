@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -23,6 +24,9 @@ class AppVersion {
   static String name = '';
 
   static Future<void> load() async {
+    // la webapp è sempre aggiornata: niente numero di build, così non
+    // obbliga il telefono ad aggiornare e non viene bloccata
+    if (kIsWeb) return;
     try {
       final i = await PackageInfo.fromPlatform();
       build = int.tryParse(i.buildNumber) ?? 0;

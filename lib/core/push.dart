@@ -54,6 +54,8 @@ class Push {
         return '$partnerName ha spento gli avvisi dal partner.';
       case 'no_token':
         return '$partnerName deve aprire Ukeep (versione nuova) almeno una volta.';
+      case 'web':
+        return 'Dalla versione web le notifiche non partono: prova dall\'app.';
       case 'no_key':
         return 'Manca la chiave per le notifiche nella build (secret FCM_SA_B64).';
       case 'unregistered':
@@ -134,7 +136,8 @@ class Push {
 
   Future<void> init(String uid) async {
     _uid = uid;
-    if (_inited) return;
+    // sul web niente push: l'app web non riceve notifiche
+    if (_inited || kIsWeb) return;
     _inited = true;
     await _loadKey();
     try {
@@ -206,6 +209,10 @@ class Push {
       final token = p.str('fcmToken');
       if (token.isEmpty) {
         lastError = 'no_token';
+        return false;
+      }
+      if (kIsWeb) {
+        lastError = 'web';
         return false;
       }
       final client = await _auth();

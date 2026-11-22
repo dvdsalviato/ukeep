@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -40,7 +41,9 @@ class UkeepApp extends StatelessWidget {
             child: MediaQuery(
               data: mq.copyWith(textScaler: TextScaler.linear(sys * 0.9)),
               child: GradientBg(
-                  child: AppLock(child: child ?? const SizedBox.shrink())),
+                  child: _WebFrame(
+                      child:
+                          AppLock(child: child ?? const SizedBox.shrink()))),
             ),
           );
         },
@@ -83,4 +86,26 @@ class _Splash extends StatelessWidget {
           child: Image.asset('assets/logo.png', width: 120, height: 120),
         ),
       );
+}
+
+/// Sul computer la webapp resta larga come un telefono, al centro.
+class _WebFrame extends StatelessWidget {
+  const _WebFrame({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!kIsWeb) return child;
+    final mq = MediaQuery.of(context);
+    if (mq.size.width <= 560) return child;
+    return Center(
+      child: SizedBox(
+        width: 560,
+        child: MediaQuery(
+          data: mq.copyWith(size: Size(560, mq.size.height)),
+          child: child,
+        ),
+      ),
+    );
+  }
 }
